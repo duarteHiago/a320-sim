@@ -1,0 +1,8 @@
+{
+  "partNumber": "PRP-A320-CEO",
+  "nome": "Propulsão ceo (IAE V2500)",
+  "grupo": "PROPULSAO",
+  "versao": "CEO",
+  "modulos": ["br.a320sim.cartridges.propulsao.FadecIae", "br.a320sim.cartridges.propulsao.AutopilotBasic"],
+  "requer": []
+}

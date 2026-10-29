@@ -1,0 +1,2 @@
+// Contratos compartilhados: barramento, módulos (caixas) e cartuchos.
+// Não depende de nada — tanto o host quanto os cartuchos dependem dele.

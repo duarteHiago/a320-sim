@@ -1,0 +1,8 @@
+{
+  "partNumber": "PLT-A320-CEO",
+  "nome": "Plataforma ceo",
+  "grupo": "PLATAFORMA",
+  "versao": "CEO",
+  "modulos": ["br.a320sim.cartridges.plataforma.AdiruCeo", "br.a320sim.cartridges.plataforma.Elac"],
+  "requer": []
+}

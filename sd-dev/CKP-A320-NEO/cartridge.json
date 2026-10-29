@@ -1,0 +1,8 @@
+{
+  "partNumber": "CKP-A320-NEO",
+  "nome": "Cockpit neo (LCD)",
+  "grupo": "COCKPIT",
+  "versao": "NEO",
+  "modulos": ["br.a320sim.cartridges.cockpit.DmcLcd", "br.a320sim.cartridges.cockpit.FwcAdvanced"],
+  "requer": []
+}

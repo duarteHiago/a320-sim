@@ -1,0 +1,8 @@
+{
+  "partNumber": "PRP-A320-NEO",
+  "nome": "Propulsão neo (PW1100G)",
+  "grupo": "PROPULSAO",
+  "versao": "NEO",
+  "modulos": ["br.a320sim.cartridges.propulsao.FadecPw", "br.a320sim.cartridges.propulsao.AutopilotFull"],
+  "requer": [{ "grupo": "COCKPIT", "versaoMin": "NEO" }]
+}

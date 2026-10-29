@@ -1,0 +1,5 @@
+// Software das caixas (ADIRU, ELAC, FADEC, AP, DMC, FWC).
+// Fase 0: ficam no classpath do host. Fase 3: cada cartucho vira um .jar próprio no SD.
+dependencies {
+    implementation project(':core')
+}

@@ -1,0 +1,27 @@
+apply plugin: 'application'
+
+dependencies {
+    implementation project(':core')
+    implementation project(':flightmodel')
+    implementation 'com.google.code.gson:gson:2.11.0'
+    runtimeOnly project(':cartridges')
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    workingDir = rootProject.projectDir
+}
+
+application {
+    mainClass = 'br.a320sim.host.HostMain'
+}
+
+tasks.named('run') {
+    standardInput = System.in
+    workingDir = rootProject.projectDir
+    jvmArgs '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+}

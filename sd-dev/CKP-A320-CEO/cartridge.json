@@ -1,0 +1,8 @@
+{
+  "partNumber": "CKP-A320-CEO",
+  "nome": "Cockpit ceo (CRT)",
+  "grupo": "COCKPIT",
+  "versao": "CEO",
+  "modulos": ["br.a320sim.cartridges.cockpit.DmcCrt", "br.a320sim.cartridges.cockpit.FwcBasic"],
+  "requer": []
+}

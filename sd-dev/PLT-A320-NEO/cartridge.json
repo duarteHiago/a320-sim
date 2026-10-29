@@ -1,0 +1,8 @@
+{
+  "partNumber": "PLT-A320-NEO",
+  "nome": "Plataforma neo",
+  "grupo": "PLATAFORMA",
+  "versao": "NEO",
+  "modulos": ["br.a320sim.cartridges.plataforma.AdiruNeo", "br.a320sim.cartridges.plataforma.Elac"],
+  "requer": []
+}
