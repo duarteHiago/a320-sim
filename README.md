@@ -2,6 +2,14 @@
 
 Simulador de A320 com estética de console retrô. As "caixas pretas" do avião são carregadas por **cartuchos** (cartões SD), e o instrutor monta o avião escolhendo quais cartuchos encaixar.
 
+![Vista pela janela na cabeceira da pista 15 de Viracopos](docs/img/janela-pista.png)
+
+| Monte seu A320 | Em voo pela janela |
+|---|---|
+| ![Tela de montagem do rack com três cartuchos](docs/img/rack.png) | ![Vista pela janela a 8000 pés com HUD](docs/img/janela-voo.png) |
+| **Painel neo (LCD), em voo** | **Painel ceo (CRT), sensores alinhando** |
+| ![Painel neo com PFD, ND e E/WD](docs/img/painel-neo.png) | ![Painel ceo com bandeiras ATT/HDG e motor IAE em EPR](docs/img/painel-ceo.png) |
+
 ## Rack
 
 | Slot | Caixas | ceo | neo |
