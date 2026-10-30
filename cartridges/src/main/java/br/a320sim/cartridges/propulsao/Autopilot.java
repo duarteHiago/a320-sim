@@ -47,6 +47,12 @@ public abstract class Autopilot extends BaseModule {
 
     @Override
     protected void onTick(double dt) {
+        // Saídas sumiram do barramento = a caixa foi resetada por uma pane: desengaja tudo
+        if (!bus.has(Labels.AP_MODES)) {
+            engaged = false;
+            athr = false;
+        }
+        bus.publish(Labels.AP_MODES, modes);
         boolean irValid = "NAV".equals(bus.getString(Labels.IR_ALIGN_STATUS, ""));
         boolean airborne = !bus.getBoolean(Labels.SIM_ON_GROUND);
 

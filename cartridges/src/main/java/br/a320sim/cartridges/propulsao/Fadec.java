@@ -39,8 +39,10 @@ public abstract class Fadec extends BaseModule {
         }
         double target = IDLE_N1 + lever * (MAX_N1 - IDLE_N1);
         n1 += (target - n1) * Math.min(1, spoolRate * dt);
+        double epr = 1.0 + 0.55 * (n1 - IDLE_N1) / (MAX_N1 - IDLE_N1);
         bus.publish(Labels.ENG1_N1, n1);
         bus.publish(Labels.ENG2_N1, n1);
-        bus.publish(Labels.ENG_EPR, 1.0 + 0.55 * (n1 - IDLE_N1) / (MAX_N1 - IDLE_N1));
+        bus.publish(Labels.ENG1_EPR, epr);
+        bus.publish(Labels.ENG2_EPR, epr);
     }
 }

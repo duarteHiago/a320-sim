@@ -76,7 +76,7 @@ public class BootScreen extends RetroScreen {
             print("TODOS OS SISTEMAS PRONTOS", Color.WHITE);
             app.sound().play(Sfx.BOOT);
         });
-        step(1.4f, () -> app.setScreen(new CockpitScreen(app)));
+        step(1.4f, app::afterBoot);
     }
 
     private void step(float delay, Runnable action) {

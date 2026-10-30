@@ -80,7 +80,7 @@ public class RackScreen extends RetroScreen {
             return;
         }
         if (Gdx.input.isKeyJustPressed(Keys.ESCAPE)) {
-            Gdx.app.exit();
+            app.showTitle();
             return;
         }
         if (Gdx.input.isKeyJustPressed(Keys.LEFT) || Gdx.input.isKeyJustPressed(Keys.A)) {
@@ -143,7 +143,8 @@ public class RackScreen extends RetroScreen {
 
     @Override
     protected void paint(Draw d) {
-        d.text("MONTE SEU A320", WIDTH / 2f, 334, YELLOW, Align.CENTER, 2);
+        boolean instructor = app.mode() == SimApp.Mode.INSTRUCTOR;
+        d.text(instructor ? "MONTE O A320 DO ALUNO" : "MONTE SEU A320", WIDTH / 2f, 334, YELLOW, Align.CENTER, 2);
         d.text("escolha um cartucho para cada slot", WIDTH / 2f, 310, GREY, Align.CENTER);
 
         for (int i = 0; i < GROUPS.length; i++) {
@@ -180,7 +181,7 @@ public class RackScreen extends RetroScreen {
                 y -= 14;
             }
         }
-        d.text("SETAS: escolher    ENTER: ligar    ESC: sair", WIDTH / 2f, 14, GREY, Align.CENTER);
+        d.text("SETAS: escolher    ENTER: ligar    ESC: voltar", WIDTH / 2f, 14, GREY, Align.CENTER);
     }
 
     private void cartridge(Draw d, float x, Cartridge cartridge) {

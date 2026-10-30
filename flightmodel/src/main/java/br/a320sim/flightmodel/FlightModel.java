@@ -72,9 +72,16 @@ public class FlightModel {
         publish();
     }
 
-    /** Reposiciona o avião em voo nivelado (atalho do instrutor). */
+    /** Reposiciona o avião em voo nivelado no lugar onde ele está (atalho do instrutor). */
     public void resetAirborne(double altFt, double iasKt, double headingDeg) {
+        resetAirborne(altFt, iasKt, headingDeg, x / NM, y / NM);
+    }
+
+    /** Reposiciona o avião em voo nivelado numa posição em milhas náuticas a partir da cabeceira. */
+    public void resetAirborne(double altFt, double iasKt, double headingDeg, double xNm, double yNm) {
         resetOnRunway();
+        x = xNm * NM;
+        y = yNm * NM;
         alt = (altFt - FIELD_ELEVATION_FT) * FT;
         v = iasKt * KT / Math.sqrt(density() / 1.225);
         heading = headingDeg;

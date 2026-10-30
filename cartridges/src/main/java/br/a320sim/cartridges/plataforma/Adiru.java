@@ -47,13 +47,12 @@ public abstract class Adiru extends BaseModule {
             instantAlignRequests = requests;
             elapsed = alignSeconds - dt;
         }
-        if (elapsed < alignSeconds) {
-            elapsed = Math.min(alignSeconds, elapsed + dt);
-            bus.publish(Labels.IR_ALIGN_PROGRESS, elapsed / alignSeconds);
-            if (elapsed < alignSeconds) {
-                return;
-            }
-            bus.publish(Labels.IR_ALIGN_STATUS, "NAV");
+        elapsed = Math.min(alignSeconds, elapsed + dt);
+        bus.publish(Labels.IR_ALIGN_PROGRESS, elapsed / alignSeconds);
+        boolean aligned = elapsed >= alignSeconds;
+        bus.publish(Labels.IR_ALIGN_STATUS, aligned ? "NAV" : "ALIGNING");
+        if (!aligned) {
+            return;
         }
         bus.publish(Labels.IR_PITCH, bus.getDouble(Labels.TRUE_PITCH, 0));
         bus.publish(Labels.IR_ROLL, bus.getDouble(Labels.TRUE_ROLL, 0));

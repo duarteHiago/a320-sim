@@ -26,12 +26,8 @@ public final class EwdDisplay implements CockpitDisplay {
 
         if (bus.has(Labels.ENG1_N1)) {
             boolean epr = "EPR".equals(bus.getString(Labels.ENG_PRIMARY_PARAM, "N1"));
-            double n1 = bus.getDouble(Labels.ENG1_N1, 0);
-            double value = epr ? bus.getDouble(Labels.ENG_EPR, 1) : n1;
-            double fraction = epr ? (value - 1) / 0.6 : value / 100;
-            String text = epr ? String.format("%.3f", value) : String.format("%.1f", value);
-            gauge(d, t, x + 50, gaugeY, fraction, text);
-            gauge(d, t, x + size - 50, gaugeY, fraction, text);
+            engine(d, bus, t, x + 50, gaugeY, epr, Labels.ENG1_N1, Labels.ENG1_EPR);
+            engine(d, bus, t, x + size - 50, gaugeY, epr, Labels.ENG2_N1, Labels.ENG2_EPR);
             d.text(epr ? "EPR" : "N1", mid, gaugeY + 4, t.white(), Align.CENTER);
             d.text(epr ? "" : "%", mid, gaugeY - 12, t.cyan(), Align.CENTER);
             d.text(bus.getString(Labels.ENG_TYPE, ""), mid, y + size - 10, t.white(), Align.CENTER);
@@ -58,6 +54,13 @@ public final class EwdDisplay implements CockpitDisplay {
                 lineY -= 14;
             }
         }
+    }
+
+    private void engine(Draw d, DataBus bus, Theme t, float cx, float cy, boolean epr, String n1Label,
+                        String eprLabel) {
+        double value = epr ? bus.getDouble(eprLabel, 1) : bus.getDouble(n1Label, 0);
+        double fraction = epr ? (value - 1) / 0.6 : value / 100;
+        gauge(d, t, cx, cy, fraction, epr ? String.format("%.3f", value) : String.format("%.1f", value));
     }
 
     private void gauge(Draw d, Theme t, float cx, float cy, double fraction, String text) {

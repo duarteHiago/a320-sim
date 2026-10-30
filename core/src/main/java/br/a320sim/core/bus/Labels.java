@@ -71,7 +71,8 @@ public final class Labels {
     public static final String ENG_PRIMARY_PARAM = "ENG.PRIMARY_PARAM";
     public static final String ENG1_N1 = "ENG.1.N1";
     public static final String ENG2_N1 = "ENG.2.N1";
-    public static final String ENG_EPR = "ENG.EPR";
+    public static final String ENG1_EPR = "ENG.1.EPR";
+    public static final String ENG2_EPR = "ENG.2.EPR";
 
     // Piloto automático (FCU/FMGC)
     public static final String AP_MODES = "AP.MODES";
@@ -91,4 +92,15 @@ public final class Labels {
     public static final String FWC_CAUTIONS = "FWC.CAUTIONS";
     public static final String FWC_MASTER_WARN = "FWC.MASTER_WARN";
     public static final String FWC_MASTER_CAUT = "FWC.MASTER_CAUT";
+
+    // Estação do instrutor
+    public static final String IOS_RACK = "IOS.RACK";
+    public static final String IOS_MESSAGE = "IOS.MESSAGE";
+    public static final String IOS_MESSAGE_ID = "IOS.MESSAGE_ID";
+    public static final String IOS_FAILURES = "IOS.FAILURES";
+
+    /** Labels que o aluno controla (manche, manete, alavancas, FCU) e que viajam do cockpit para o host. */
+    public static boolean isPilotInput(String label) {
+        return label.startsWith("SIM.CTL.") || label.startsWith("PANEL.") || label.equals(SIM_THRUST_LEVER);
+    }
 }

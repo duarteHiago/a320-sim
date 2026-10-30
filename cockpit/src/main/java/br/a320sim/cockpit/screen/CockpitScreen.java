@@ -2,11 +2,13 @@ package br.a320sim.cockpit.screen;
 
 import br.a320sim.cockpit.SimApp;
 import br.a320sim.cockpit.audio.AlertSounds;
+import br.a320sim.cockpit.audio.Sfx;
 import br.a320sim.cockpit.display.CockpitDisplay;
 import br.a320sim.cockpit.display.EwdDisplay;
 import br.a320sim.cockpit.display.NdDisplay;
 import br.a320sim.cockpit.display.PfdDisplay;
 import br.a320sim.cockpit.gfx.Draw;
+import br.a320sim.cockpit.gfx.Draw.Align;
 import br.a320sim.cockpit.gfx.Theme;
 import br.a320sim.cockpit.input.ControlInputs;
 import br.a320sim.cockpit.input.InputDevice;
@@ -14,10 +16,14 @@ import br.a320sim.cockpit.input.KeyboardInput;
 import br.a320sim.cockpit.panel.FcuPanel;
 import br.a320sim.cockpit.panel.Glareshield;
 import br.a320sim.cockpit.panel.Pedestal;
+import br.a320sim.cockpit.session.SimSession;
 import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
-import br.a320sim.host.Host;
+import br.a320sim.host.command.FreezeCommand;
+import br.a320sim.host.command.InstantAlignCommand;
+import br.a320sim.host.command.RepositionCommand;
+import br.a320sim.host.command.ResetToRunwayCommand;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Input.Keys;
@@ -26,18 +32,25 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Vector2;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
-/** A cabine do aluno: lê os controles, roda o host e desenha as telas a partir do barramento. */
+/**
+ * A cabine do aluno: lê os controles, avança a sessão e desenha as telas a partir do barramento.
+ * Funciona igual no modo SOLO e no modo ALUNO; só muda a {@link SimSession}.
+ */
 public class CockpitScreen extends RetroScreen {
 
     private static final float DISPLAY_SIZE = 206;
     private static final float DISPLAY_Y = 132;
     private static final float DISPLAY_GAP = 6;
     private static final Color BEZEL = Color.valueOf("3a3f48");
+    private static final Color BANNER = new Color(0, 0, 0, 0.8f);
+    private static final Color CYAN = Color.valueOf("38e8ff");
+    private static final Color AMBER = Color.valueOf("ffb020");
     private static final double REPOSITION_ALT = 8000;
     private static final double REPOSITION_IAS = 250;
+    private static final float MESSAGE_SECONDS = 10;
 
+    private final SimSession session;
     private final InputDevice input = new KeyboardInput();
     private final List<CockpitDisplay> displays = List.of(new PfdDisplay(), new NdDisplay(), new EwdDisplay());
     private final FcuPanel fcu = new FcuPanel();
@@ -45,7 +58,6 @@ public class CockpitScreen extends RetroScreen {
     private final Glareshield glareshield = new Glareshield();
     private final AlertSounds alerts = new AlertSounds();
     private final Windshield windshield = new Windshield();
-    private final String rackText;
     private final InputAdapter scrollListener = new InputAdapter() {
         @Override
         public boolean scrolled(float amountX, float amountY) {
@@ -57,18 +69,17 @@ public class CockpitScreen extends RetroScreen {
     private ControlInputs controls = input.read();
     private float scroll;
     private float time;
-    private boolean paused;
     private int discPushes;
-    private int alignRequests;
     private boolean windowView = "janela".equals(System.getProperty("sim.view"));
+    private double lastMessageId;
+    private float messageTimer;
 
-    public CockpitScreen(SimApp app) {
+    public CockpitScreen(SimApp app, SimSession session) {
         super(app);
-        rackText = app.host().rack().slots().values().stream()
-                .map(c -> c.manifest().partNumber())
-                .collect(Collectors.joining("  "));
+        this.session = session;
+        lastMessageId = session.bus().getDouble(Labels.IOS_MESSAGE_ID, 0);
         if (System.getProperty("sim.airborne") != null) {
-            reposition();
+            session.execute(new RepositionCommand(REPOSITION_ALT, REPOSITION_IAS));
         }
     }
 
@@ -86,26 +97,30 @@ public class CockpitScreen extends RetroScreen {
     @Override
     protected void update(float delta) {
         time += delta;
-        Host host = app.host();
-        DataBus bus = host.bus();
+        DataBus bus = session.bus();
 
         if (Gdx.input.isKeyJustPressed(Keys.ESCAPE)) {
-            host.powerOff();
-            app.setScreen(new RackScreen(app));
+            session.close();
+            if (session.acceptsCommands()) {
+                app.setScreen(new RackScreen(app));
+            } else {
+                app.showTitle();
+            }
             return;
         }
-        if (Gdx.input.isKeyJustPressed(Keys.P)) {
-            paused = !paused;
-            bus.publish(Labels.SIM_FREEZE, paused);
-        }
-        if (Gdx.input.isKeyJustPressed(Keys.R)) {
-            host.flightModel().resetOnRunway();
-        }
-        if (Gdx.input.isKeyJustPressed(Keys.T)) {
-            reposition();
-        }
-        if (Gdx.input.isKeyJustPressed(Keys.I)) {
-            bus.publish(Labels.SIM_IR_INSTANT_ALIGN, (double) ++alignRequests);
+        if (session.acceptsCommands()) {
+            if (Gdx.input.isKeyJustPressed(Keys.P)) {
+                session.execute(new FreezeCommand(!bus.getBoolean(Labels.SIM_FREEZE)));
+            }
+            if (Gdx.input.isKeyJustPressed(Keys.R)) {
+                session.execute(new ResetToRunwayCommand());
+            }
+            if (Gdx.input.isKeyJustPressed(Keys.T)) {
+                session.execute(new RepositionCommand(REPOSITION_ALT, REPOSITION_IAS));
+            }
+            if (Gdx.input.isKeyJustPressed(Keys.I)) {
+                session.execute(new InstantAlignCommand());
+            }
         }
         if (Gdx.input.isKeyJustPressed(Keys.M)) {
             alerts.acknowledge();
@@ -131,11 +146,12 @@ public class CockpitScreen extends RetroScreen {
         scroll = 0;
         fcu.publish(bus);
 
-        host.advance(delta);
+        session.update(delta);
         for (CockpitDisplay display : displays) {
             display.update(bus, delta);
         }
         alerts.update(bus, delta, app.sound());
+        checkInstructorMessage(bus, delta);
     }
 
     private void publishControls(DataBus bus) {
@@ -149,37 +165,51 @@ public class CockpitScreen extends RetroScreen {
         bus.publish(Labels.PANEL_AP_DISC, (double) discPushes);
     }
 
-    /** Atalho de instrutor: põe o avião em voo nivelado e alinha os sensores na hora. */
-    private void reposition() {
-        DataBus bus = app.host().bus();
-        double heading = bus.getDouble(Labels.TRUE_HDG, 0);
-        app.host().flightModel().resetAirborne(REPOSITION_ALT, REPOSITION_IAS, heading);
-        bus.publish(Labels.SIM_IR_INSTANT_ALIGN, (double) ++alignRequests);
+    private void checkInstructorMessage(DataBus bus, float delta) {
+        double id = bus.getDouble(Labels.IOS_MESSAGE_ID, 0);
+        if (id != lastMessageId) {
+            lastMessageId = id;
+            messageTimer = MESSAGE_SECONDS;
+            app.sound().play(Sfx.CHIME);
+        }
+        messageTimer = Math.max(0, messageTimer - delta);
     }
 
     @Override
     protected void paint(Draw d) {
-        DataBus bus = app.host().bus();
+        DataBus bus = session.bus();
         Theme theme = theme();
 
-        glareshield.draw(d, alerts, time, rackText);
+        glareshield.draw(d, alerts, time, session.rackText());
         if (windowView) {
             windshield.draw(d, bus, 0, DISPLAY_Y);
-            fcu.draw(d, bus);
-            pedestal.draw(d, bus, controls, paused);
-            return;
-        }
-        for (int i = 0; i < displays.size(); i++) {
-            float x = 5 + i * (DISPLAY_SIZE + DISPLAY_GAP);
-            d.rect(x - 2, DISPLAY_Y - 2, DISPLAY_SIZE + 4, DISPLAY_SIZE + 4, BEZEL);
-            if (theme == null) {
-                d.rect(x, DISPLAY_Y, DISPLAY_SIZE, DISPLAY_SIZE, Color.BLACK);
-            } else {
-                displays.get(i).draw(d, bus, theme, x, DISPLAY_Y, DISPLAY_SIZE);
+        } else {
+            for (int i = 0; i < displays.size(); i++) {
+                float x = 5 + i * (DISPLAY_SIZE + DISPLAY_GAP);
+                d.rect(x - 2, DISPLAY_Y - 2, DISPLAY_SIZE + 4, DISPLAY_SIZE + 4, BEZEL);
+                if (theme == null) {
+                    d.rect(x, DISPLAY_Y, DISPLAY_SIZE, DISPLAY_SIZE, Color.BLACK);
+                } else {
+                    displays.get(i).draw(d, bus, theme, x, DISPLAY_Y, DISPLAY_SIZE);
+                }
             }
         }
         fcu.draw(d, bus);
-        pedestal.draw(d, bus, controls, paused);
+        pedestal.draw(d, bus, controls, bus.getBoolean(Labels.SIM_FREEZE));
+
+        if (messageTimer > 0) {
+            banner(d, "INSTRUTOR: " + bus.getString(Labels.IOS_MESSAGE, ""), CYAN, 310);
+        }
+        String status = session.status();
+        if (status != null) {
+            banner(d, status, AMBER, 236);
+        }
+    }
+
+    private void banner(Draw d, String text, Color color, float y) {
+        d.rect(20, y - 13, WIDTH - 40, 26, BANNER);
+        d.frame(20, y - 13, WIDTH - 40, 26, color);
+        d.text(text, WIDTH / 2f, y, color, Align.CENTER);
     }
 
     @Override
@@ -195,7 +225,7 @@ public class CockpitScreen extends RetroScreen {
     }
 
     private Theme theme() {
-        return Theme.forStyle(app.host().bus().has(Labels.DMC_STYLE)
-                ? app.host().bus().getString(Labels.DMC_STYLE, null) : null);
+        DataBus bus = session.bus();
+        return Theme.forStyle(bus.has(Labels.DMC_STYLE) ? bus.getString(Labels.DMC_STYLE, null) : null);
     }
 }

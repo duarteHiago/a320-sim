@@ -10,6 +10,10 @@ Simulador de A320 com estética de console retrô. As "caixas pretas" do avião 
 | **Painel neo (LCD), em voo** | **Painel ceo (CRT), sensores alinhando** |
 | ![Painel neo com PFD, ND e E/WD](docs/img/painel-neo.png) | ![Painel ceo com bandeiras ATT/HDG e motor IAE em EPR](docs/img/painel-ceo.png) |
 
+**Estação do instrutor**, conectada ao aluno pela rede:
+
+![Estação do instrutor com mapa, espelho do aluno, falhas e comandos](docs/img/ios.png)
+
 ## Rack
 
 | Slot | Caixas | ceo | neo |
@@ -25,17 +29,47 @@ Regra: **PROPULSAO neo exige COCKPIT neo**.
 - `core`: contratos (barramento, `AvionicsModule`, `BaseModule`, cartuchos)
 - `flightmodel`: física simplificada (sustentação, arrasto, empuxo, peso, solo)
 - `cartridges`: software das caixas
-- `host`: o "supercomputador" (rack, cartuchos, loop de simulação, console do instrutor)
-- `cockpit`: tela do aluno em LibGDX (rack, boot, PFD, ND, E/WD, FCU, sons)
+- `host`: o "supercomputador" (rack, cartuchos, loop de simulação, falhas, comandos do instrutor)
+- `net`: comunicação TCP entre o PC do instrutor e o do aluno
+- `cockpit`: o programa gráfico em LibGDX (título, rack, boot, cockpit, estação do instrutor)
 - `sd-dev/`: pastas que fingem ser cartões SD durante o desenvolvimento
 
 ## Rodar
 
 ```
-gradlew :cockpit:run      # cockpit gráfico
-gradlew :host:run --console=plain   # console do instrutor (texto)
-gradlew test              # testes (modelo de voo + voo completo com piloto automático)
+gradlew :cockpit:run      # o simulador (escolha SOLO, INSTRUTOR ou ALUNO na tela de título)
+gradlew :host:run --console=plain   # console de texto do host
+gradlew test              # testes (física, voo com piloto automático, falhas, rede)
 ```
+
+### Treinando em dois PCs (instrutor + aluno)
+
+É o mesmo programa nos dois PCs; na tela de título cada um escolhe o seu papel.
+
+1. **Instrutor:** escolhe **INSTRUTOR**, monta o rack e liga o avião. No topo da estação aparece **"AGUARDANDO ALUNO  IP: ..."**.
+2. **Aluno:** escolhe **ALUNO**, digita o IP mostrado no PC do instrutor e aperta ENTER.
+3. Quando conecta, o instrutor vê **"ALUNO: nome (ip)"** em verde.
+
+- **Mesmo Wi-Fi/rede:** use o IP local do instrutor (ex.: `192.168.0.15`).
+- **Casas diferentes:** os dois instalam a mesma VPN de jogos (**Radmin VPN**, **ZeroTier** ou **Tailscale**) e entram na mesma rede; use o IP que a VPN dá ao instrutor.
+- Na primeira vez, o **Firewall do Windows** do instrutor pergunta se libera o Java: permita em redes privadas. A porta usada é a **7320**.
+
+### Estação do instrutor
+
+| Comando | O que faz |
+|---|---|
+| PAUSAR / CONTINUAR | congela a simulação |
+| PISTA | volta o avião à cabeceira |
+| EM VOO | 8000 ft, 250 kt, mantendo a proa |
+| NA FINAL | alinhado com a pista 15, a 5 NM e 1600 ft |
+| ALINHAR IR | alinhamento instantâneo dos sensores |
+| CARTUCHOS | desliga o avião e volta ao rack |
+| MOTOR 1 PARADO | apaga o motor 1 (alarme ENG 1 FAIL) |
+| PANE NOS SENSORES | some velocidade, altitude e atitude; fly-by-wire cai para Lei Direta |
+| PILOTO AUTOMATICO INOP | desengaja o AP e impede religar |
+| MSG (ENTER) | escreve uma mensagem que aparece na tela do aluno |
+
+O mapa mostra o avião do aluno, o rastro e a pista; o espelho mostra os dados reais e os alertas que o aluno está vendo.
 
 ### Comandos do cockpit
 
@@ -50,13 +84,13 @@ gradlew test              # testes (modelo de voo + voo completo com piloto auto
 | B (segurar) | freio |
 | ESPAÇO | desliga o piloto automático |
 | M ou clique nas luzes | silencia MASTER WARN / CAUT |
-| P | pausa |
-| R | volta para a pista |
-| T | reposiciona em voo (8000 ft, 250 kt) |
-| I | alinhamento instantâneo dos sensores |
+| P | pausa (só no SOLO) |
+| R | volta para a pista (só no SOLO) |
+| T | reposiciona em voo, 8000 ft e 250 kt (só no SOLO) |
+| I | alinhamento instantâneo dos sensores (só no SOLO) |
 | C | alterna PAINEL (instrumentos) e JANELA (para-brisa) |
 | F12 | screenshot (pasta `screenshots/`) |
-| ESC | volta para o rack |
+| ESC | volta para o rack (SOLO) ou desconecta (ALUNO) |
 
 Mouse no FCU: rodinha sobre SPD/HDG/ALT/V/S ajusta (SHIFT = x10), clique em AP1 e A/THR.
 
@@ -74,6 +108,6 @@ Mouse no FCU: rodinha sobre SPD/HDG/ALT/V/S ajusta (SHIFT = x10), clique em AP1 
 1. Modelo de voo simplificado ✅
 2. Cockpit 2D (PFD, ND, ECAM), teclado e mouse, sons ✅ e vista pela janela estilo Mode 7 ✅
 3. Cartuchos reais: leitores SD (ou `subst`/pendrive), `.jar` por cartucho
-4. Rede: host (instrutor) ↔ cockpit (aluno)
-5. Estação do instrutor: clima, falhas, freeze, reposicionamento
+4. Rede instrutor ↔ aluno + estação do instrutor (falhas, pausa, reposicionamento, mensagens) ✅
+5. Estação do instrutor completa: clima, snapshots, falhas programadas, mais falhas
 6. Polimento: mais cenário (nuvens, noite, aeroportos), fonte pixel, debriefing

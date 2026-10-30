@@ -48,8 +48,16 @@ public abstract class Fwc extends BaseModule {
 
     protected void collectAlerts(DataBus bus, List<String> warnings, List<String> cautions) {
         boolean airborne = !bus.getBoolean(Labels.SIM_ON_GROUND);
-        if (!"NAV".equals(bus.getString(Labels.IR_ALIGN_STATUS, ""))) {
+        if (!bus.has(Labels.IR_ALIGN_STATUS)) {
+            cautions.add("NAV ADIRU FAULT");
+        } else if (!"NAV".equals(bus.getString(Labels.IR_ALIGN_STATUS, ""))) {
             cautions.add("NAV IR NOT ALIGNED");
+        }
+        if (bus.has(Labels.ENG1_N1) && bus.getDouble(Labels.ENG1_N1, 0) < 10) {
+            warnings.add("ENG 1 FAIL");
+        }
+        if (bus.has(Labels.ENG2_N1) && bus.getDouble(Labels.ENG2_N1, 0) < 10) {
+            warnings.add("ENG 2 FAIL");
         }
         if (airborne && bus.getDouble(Labels.ADR_AOA, 0) > 14) {
             warnings.add("STALL");

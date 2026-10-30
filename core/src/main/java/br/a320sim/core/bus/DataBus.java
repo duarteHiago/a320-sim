@@ -1,5 +1,6 @@
 package br.a320sim.core.bus;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,6 +45,17 @@ public final class DataBus {
     public String getString(String label, String fallback) {
         Object value = values.get(label);
         return value != null ? value.toString() : fallback;
+    }
+
+    /** Cópia de todos os valores, para mandar pela rede. */
+    public Map<String, Object> snapshot() {
+        return new HashMap<>(values);
+    }
+
+    /** Substitui tudo pelo conteúdo recebido (o cockpit remoto espelha o barramento do host). */
+    public void replaceAll(Map<String, Object> snapshot) {
+        values.clear();
+        values.putAll(snapshot);
     }
 
     /** Apaga todos os labels de um prefixo, ex.: quando uma caixa é desligada. */
