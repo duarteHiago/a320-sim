@@ -59,6 +59,18 @@ public final class KeyboardInput implements InputDevice {
         return new ControlInputs(pitch, roll, yaw, thrust, flaps, gearDown, held(Keys.B) ? 1 : 0, apDisconnect);
     }
 
+    @Override
+    public void takeOver(ControlInputs last) {
+        thrust = (float) last.thrustLever();
+        flaps = last.flaps();
+        gearDown = last.gearDown();
+    }
+
+    @Override
+    public boolean viewToggled() {
+        return Gdx.input.isKeyJustPressed(Keys.C);
+    }
+
     private static boolean held(int... keys) {
         for (int key : keys) {
             if (Gdx.input.isKeyPressed(key)) {

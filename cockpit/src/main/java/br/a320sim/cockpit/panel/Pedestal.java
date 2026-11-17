@@ -22,7 +22,7 @@ public final class Pedestal {
     private static final float BAR_X = 60;
     private static final float BAR_W = 150;
 
-    public void draw(Draw d, DataBus bus, ControlInputs in, boolean paused) {
+    public void draw(Draw d, DataBus bus, ControlInputs in, boolean paused, boolean simplified) {
         d.rect(4, 34, 632, 56, PANEL);
 
         double lever = in.thrustLever();
@@ -43,6 +43,9 @@ public final class Pedestal {
         d.text("FLAPS", 240, 74, LABEL, Align.LEFT);
         d.text(FLAP_NAMES[in.flaps()], 240, 54, GREEN, Align.LEFT);
         d.text("TREM", 310, 74, LABEL, Align.LEFT);
+        if (simplified) {
+            d.text("FLAPS/TREM AUTO", 370, 74, CYAN, Align.LEFT);
+        }
         d.text(in.gearDown() ? "DN" : "UP", 310, 54, in.gearDown() ? GREEN : LABEL, Align.LEFT);
         if (in.brakes() > 0) {
             d.text("FREIO", 370, 54, AMBER, Align.LEFT);
@@ -54,10 +57,17 @@ public final class Pedestal {
             d.text("PAUSA", 628, 64, YELLOW, Align.RIGHT);
         }
 
-        d.text("W/S A/D manche  Q/E leme  SHIFT/CTRL manete  1-4 IDLE/CL/FLX/TOGA  F/V flaps  G trem",
-                8, 22, HINT, Align.LEFT);
-        d.text("B freio  ESPACO desl.AP  M silencia  P pausa  R pista  T em voo  I alinhar  C vista  ESC rack",
-                8, 8, HINT, Align.LEFT);
+        if (simplified) {
+            d.text("CONTROLE  analogico esq: direcao   RT: acelera   LT: reduz / freia   A: desl.AP   Y: vista",
+                    8, 22, CYAN, Align.LEFT);
+            d.text("flaps e trem automaticos   (teclado: M silencia  P pausa  R pista  T em voo  ESC rack)",
+                    8, 8, HINT, Align.LEFT);
+        } else {
+            d.text("W/S A/D manche  Q/E leme  SHIFT/CTRL manete  1-4 IDLE/CL/FLX/TOGA  F/V flaps  G trem",
+                    8, 22, HINT, Align.LEFT);
+            d.text("B freio  ESPACO desl.AP  M silencia  P pausa  R pista  T em voo  I alinhar  C vista  ESC rack",
+                    8, 8, HINT, Align.LEFT);
+        }
     }
 
     private static String detentName(double lever) {

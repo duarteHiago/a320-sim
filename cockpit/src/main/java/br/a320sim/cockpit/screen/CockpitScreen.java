@@ -11,8 +11,8 @@ import br.a320sim.cockpit.gfx.Draw;
 import br.a320sim.cockpit.gfx.Draw.Align;
 import br.a320sim.cockpit.gfx.Theme;
 import br.a320sim.cockpit.input.ControlInputs;
-import br.a320sim.cockpit.input.InputDevice;
-import br.a320sim.cockpit.input.KeyboardInput;
+import br.a320sim.cockpit.input.AutoInput;
+import br.a320sim.cockpit.input.MenuInput;
 import br.a320sim.cockpit.panel.FcuPanel;
 import br.a320sim.cockpit.panel.Glareshield;
 import br.a320sim.cockpit.panel.Pedestal;
@@ -20,6 +20,7 @@ import br.a320sim.cockpit.session.SimSession;
 import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
+import br.a320sim.host.command.FinalApproachCommand;
 import br.a320sim.host.command.FreezeCommand;
 import br.a320sim.host.command.InstantAlignCommand;
 import br.a320sim.host.command.RepositionCommand;
@@ -46,12 +47,13 @@ public class CockpitScreen extends RetroScreen {
     private static final Color BANNER = new Color(0, 0, 0, 0.8f);
     private static final Color CYAN = Color.valueOf("38e8ff");
     private static final Color AMBER = Color.valueOf("ffb020");
+    private static final Color RED = Color.valueOf("ff3a30");
     private static final double REPOSITION_ALT = 8000;
     private static final double REPOSITION_IAS = 250;
     private static final float MESSAGE_SECONDS = 10;
 
     private final SimSession session;
-    private final InputDevice input = new KeyboardInput();
+    private final AutoInput input = new AutoInput();
     private final List<CockpitDisplay> displays = List.of(new PfdDisplay(), new NdDisplay(), new EwdDisplay());
     private final FcuPanel fcu = new FcuPanel();
     private final Pedestal pedestal = new Pedestal();
@@ -67,6 +69,8 @@ public class CockpitScreen extends RetroScreen {
     };
 
     private ControlInputs controls = input.read();
+    private String inputNotice;
+    private float inputNoticeTimer;
     private float scroll;
     private float time;
     private int discPushes;
@@ -81,6 +85,9 @@ public class CockpitScreen extends RetroScreen {
         if (System.getProperty("sim.airborne") != null) {
             session.execute(new RepositionCommand(REPOSITION_ALT, REPOSITION_IAS));
         }
+        if (System.getProperty("sim.final") != null) {
+            session.execute(new FinalApproachCommand());
+        }
     }
 
     @Override
@@ -91,6 +98,8 @@ public class CockpitScreen extends RetroScreen {
     @Override
     public void hide() {
         Gdx.input.setInputProcessor(null);
+        input.close();
+        app.sound().silenceAmbience();
         super.hide();
     }
 
@@ -99,7 +108,8 @@ public class CockpitScreen extends RetroScreen {
         time += delta;
         DataBus bus = session.bus();
 
-        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE)) {
+        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE) || MenuInput.exit()) {
+            app.sound().play(Sfx.BACK);
             session.close();
             if (session.acceptsCommands()) {
                 app.setScreen(new RackScreen(app));
@@ -109,7 +119,7 @@ public class CockpitScreen extends RetroScreen {
             return;
         }
         if (session.acceptsCommands()) {
-            if (Gdx.input.isKeyJustPressed(Keys.P)) {
+            if (Gdx.input.isKeyJustPressed(Keys.P) || MenuInput.pause()) {
                 session.execute(new FreezeCommand(!bus.getBoolean(Labels.SIM_FREEZE)));
             }
             if (Gdx.input.isKeyJustPressed(Keys.R)) {
@@ -125,12 +135,18 @@ public class CockpitScreen extends RetroScreen {
         if (Gdx.input.isKeyJustPressed(Keys.M)) {
             alerts.acknowledge();
         }
-        if (Gdx.input.isKeyJustPressed(Keys.C)) {
+        input.poll(delta);
+        if (input.viewToggled() || (input.simplified() && Gdx.input.isKeyJustPressed(Keys.C))) {
             windowView = !windowView;
         }
-
-        input.poll(delta);
-        controls = input.read();
+        controls = input.read(bus);
+        String notice = input.takeNotice();
+        if (notice != null) {
+            inputNotice = notice;
+            inputNoticeTimer = 4;
+            app.sound().play(Sfx.CHIME);
+        }
+        inputNoticeTimer = Math.max(0, inputNoticeTimer - delta);
         if (controls.apDisconnect()) {
             discPushes++;
         }
@@ -151,7 +167,21 @@ public class CockpitScreen extends RetroScreen {
             display.update(bus, delta);
         }
         alerts.update(bus, delta, app.sound());
+        cabinSound(bus);
         checkInstructorMessage(bus, delta);
+    }
+
+    /** Ronco dos motores, vento e trepidação das rodas, a partir do que o avião está fazendo. */
+    private void cabinSound(DataBus bus) {
+        if (bus.getBoolean(Labels.SIM_CRASHED)) {
+            app.sound().silenceAmbience();
+            return;
+        }
+        double n1 = (bus.getDouble(Labels.ENG1_N1, 0) + bus.getDouble(Labels.ENG2_N1, 0)) / 200;
+        double ias = bus.getDouble(Labels.TRUE_IAS, 0);
+        double wind = Math.pow(Math.min(1, ias / 330), 2);
+        double rumble = bus.getBoolean(Labels.SIM_ON_GROUND) ? Math.min(1, bus.getDouble(Labels.TRUE_GS, 0) / 110) : 0;
+        app.sound().ambience(n1, wind, rumble);
     }
 
     private void publishControls(DataBus bus) {
@@ -195,7 +225,10 @@ public class CockpitScreen extends RetroScreen {
             }
         }
         fcu.draw(d, bus);
-        pedestal.draw(d, bus, controls, bus.getBoolean(Labels.SIM_FREEZE));
+        pedestal.draw(d, bus, controls, bus.getBoolean(Labels.SIM_FREEZE), input.simplified());
+        if (inputNoticeTimer > 0) {
+            banner(d, inputNotice, CYAN, 270);
+        }
 
         if (messageTimer > 0) {
             banner(d, "INSTRUTOR: " + bus.getString(Labels.IOS_MESSAGE, ""), CYAN, 310);
@@ -203,6 +236,10 @@ public class CockpitScreen extends RetroScreen {
         String status = session.status();
         if (status != null) {
             banner(d, status, AMBER, 236);
+        }
+        List<String> missing = bus.getList(Labels.RACK_MISSING);
+        if (!missing.isEmpty() && (time % 1f) < 0.7f) {
+            banner(d, "CARTUCHO REMOVIDO: " + String.join("  ", missing), RED, 196);
         }
     }
 

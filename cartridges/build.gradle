@@ -1,5 +1,114 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
 // Software das caixas (ADIRU, ELAC, FADEC, AP, DMC, FWC).
-// Fase 0: ficam no classpath do host. Fase 3: cada cartucho vira um .jar próprio no SD.
+// Em desenvolvimento ficam no classpath do programa (pastas sd-dev/).
+// Nos cartões SD de verdade, cada cartão leva o próprio caixas.jar só com o pacote do grupo dele.
 dependencies {
     implementation project(':core')
+}
+
+def sdDev = rootProject.file('sd-dev')
+def sdOut = layout.buildDirectory.dir('sd')
+def cardJarName = 'caixas.jar'
+
+// ---------------------------------------------------------------------------------------------
+// sdImages: build/sd/<PN>/{cartridge.json, caixas.jar}, uma pasta por cartão, pronta para copiar
+// ---------------------------------------------------------------------------------------------
+def imageTasks = []
+(sdDev.listFiles() ?: []).findAll { new File(it, 'cartridge.json').isFile() }.sort().each { dir ->
+    def pn = dir.name
+    def cardManifest = new JsonSlurper().parse(new File(dir, 'cartridge.json'))
+    // O pacote de cada caixa listada (ex.: br.a320sim.cartridges.plataforma) vai inteiro para o .jar,
+    // porque as classes base (Adiru, Fadec...) moram no mesmo pacote das variantes
+    def packages = cardManifest.modulos.collect { it.substring(0, it.lastIndexOf('.')).replace('.', '/') }.unique()
+
+    def jarTask = tasks.register("cardJar_${pn}", Jar) {
+        group = 'cartuchos'
+        description = "Software do cartão ${pn}"
+        from(sourceSets.main.output) {
+            packages.each { include "${it}/**" }
+        }
+        archiveFileName = cardJarName
+        destinationDirectory = sdOut.map { it.dir(pn) }
+        manifest {
+            attributes('Cartridge-PartNumber': pn, 'Implementation-Version': project.version)
+        }
+    }
+
+    def imageTask = tasks.register("sdImage_${pn}") {
+        group = 'cartuchos'
+        description = "Imagem completa do cartão ${pn}"
+        dependsOn jarTask
+        def source = new File(dir, 'cartridge.json')
+        def target = sdOut.map { it.dir(pn).file('cartridge.json') }
+        inputs.file(source)
+        outputs.file(target)
+        doLast {
+            def json = new JsonSlurper().parse(source)
+            json.jar = cardJarName
+            target.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
+        }
+    }
+    imageTasks << imageTask
+}
+
+tasks.register('sdImages') {
+    group = 'cartuchos'
+    description = 'Gera build/sd/<PN>/ para os 6 cartões'
+    dependsOn imageTasks
+}
+
+// ---------------------------------------------------------------------------------------------
+// gravarSd: copia a imagem de um cartão para um SD.
+//   gradlew :cartridges:gravarSd -Pcartao=PLT-A320-CEO -Pdrive=G
+// Só copia os 2 arquivos (não formata nada). Recusa unidades grandes (> 64 GB) e a unidade do
+// projeto, para não gravar num HD por engano; -Pforcar=true pula a checagem de tamanho.
+// ---------------------------------------------------------------------------------------------
+tasks.register('gravarSd') {
+    group = 'cartuchos'
+    description = 'Grava um cartão: -Pcartao=<PN> -Pdrive=<letra>'
+    dependsOn 'sdImages'
+    doLast {
+        def pn = project.findProperty('cartao')
+        def letter = project.findProperty('drive')
+        if (!pn || !letter) {
+            throw new GradleException('Use: gradlew :cartridges:gravarSd -Pcartao=PLT-A320-CEO -Pdrive=G')
+        }
+        def image = sdOut.get().dir(pn).asFile
+        if (!new File(image, 'cartridge.json').isFile()) {
+            def known = sdOut.get().asFile.list()?.sort()?.join(', ')
+            throw new GradleException("Cartão ${pn} não existe. Opções: ${known}")
+        }
+
+        letter = letter.toString().replaceAll(/[:\\\/\s]/, '').toUpperCase()
+        if (letter.length() != 1) {
+            throw new GradleException("Drive inválido: use só a letra, ex.: -Pdrive=G")
+        }
+        def root = new File("${letter}:\\")
+        if (!root.exists()) {
+            throw new GradleException("Unidade ${letter}: não encontrada (o cartão está no leitor?)")
+        }
+        def projectDrive = rootProject.projectDir.absolutePath.substring(0, 1).toUpperCase()
+        def systemDrive = (System.getenv('SystemDrive') ?: 'C:').substring(0, 1).toUpperCase()
+        if (letter == projectDrive || letter == systemDrive) {
+            throw new GradleException("${letter}: é a unidade do sistema ou do projeto, não um cartão SD")
+        }
+        def gb = root.totalSpace / (1024 * 1024 * 1024)
+        if (gb > 64 && project.findProperty('forcar') != 'true') {
+            throw new GradleException(String.format('%s: tem %.0f GB; não parece um cartão SD. Use -Pforcar=true se for mesmo.', letter, gb))
+        }
+
+        def old = new File(root, 'cartridge.json')
+        if (old.isFile()) {
+            def oldPn = new JsonSlurper().parse(old).partNumber
+            println "${letter}: tinha o cartão ${oldPn}; regravando como ${pn}"
+        }
+        project.copy {
+            from image
+            into root
+        }
+        println "OK: ${pn} gravado em ${letter}:  (cartridge.json + ${cardJarName})"
+        println "Dica: 'label ${letter}: ${pn.replace('-A320-', '-')}' dá nome ao cartão no Explorer."
+    }
 }

@@ -12,6 +12,9 @@ dependencies {
     implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
     implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+    // Controles (Xbox, PlayStation, genéricos) via SDL
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-core:2.2.3"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:2.2.3"
 }
 
 application {
@@ -22,4 +25,14 @@ tasks.named('run') {
     workingDir = rootProject.projectDir
     // Repassa -Dsim.* da linha de comando do Gradle para o simulador
     systemProperties System.getProperties().findAll { it.key.toString().startsWith('sim.') }
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
 }

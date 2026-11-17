@@ -64,7 +64,6 @@ public class IosScreen extends RetroScreen {
     private final Deque<double[]> trail = new ArrayDeque<>();
     private final TextInput message = new TextInput("", 60);
     private final Rectangle messageField = new Rectangle(6, 6, 628, 22);
-    private final String rackText;
     private final String addresses;
     private float snapshotTimer;
     private double trailTimer;
@@ -73,9 +72,6 @@ public class IosScreen extends RetroScreen {
     public IosScreen(SimApp app) {
         super(app);
         Host host = app.host();
-        rackText = host.rack().slots().values().stream()
-                .map(c -> c.manifest().partNumber())
-                .collect(Collectors.joining("  "));
         addresses = SimServer.localAddresses().stream().limit(2).collect(Collectors.joining("  "));
 
         float y = 160;
@@ -131,7 +127,7 @@ public class IosScreen extends RetroScreen {
                 }
             }));
         }
-        bus.publish(Labels.IOS_RACK, rackText);
+        bus.publish(Labels.IOS_RACK, rackText(host));
         host.advance(delta);
         snapshotTimer -= delta;
         if (server != null && snapshotTimer <= 0) {
@@ -301,6 +297,13 @@ public class IosScreen extends RetroScreen {
                     Align.LEFT);
             y -= 14;
         }
+    }
+
+    /** O rack muda em voo se alguém arranca um cartão, então é montado a cada quadro. */
+    private static String rackText(Host host) {
+        return host.rack().slots().values().stream()
+                .map(c -> c.manifest().partNumber())
+                .collect(Collectors.joining("  "));
     }
 
     private static String fmt(DataBus bus, String label, String format) {

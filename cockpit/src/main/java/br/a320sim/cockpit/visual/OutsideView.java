@@ -9,11 +9,16 @@ import com.badlogic.gdx.utils.Disposable;
 
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
+import java.util.Arrays;
 
 /**
- * Sistema visual: a vista pelo para-brisa, no estilo "Mode 7" dos consoles 16-bit.
- * Para cada pixel lança um raio a partir do olho do piloto; se ele desce, encontra o chão
- * e pinta a pista, a grama, as plantações e a cidade; se sobe, pinta o céu.
+ * Sistema visual: a vista pelo para-brisa, no estilo "Mode 7" dos consoles 16-bit, com alguns extras 3D.
+ * <ol>
+ *   <li>Para cada pixel lança um raio do olho do piloto: céu com serra no horizonte, camada de nuvens,
+ *       ou o chão (pista, aeroporto, plantações com fileiras, cidade), com névoa pela distância.</li>
+ *   <li>Por cima, objetos com altura (árvores, prédios, terminal, torre), com z-buffer.</li>
+ *   <li>Por fim, as luzes: borda de pista, cabeceira, aproximação com "coelho" sequencial e PAPI.</li>
+ * </ol>
  * Lê a verdade física (TRUE.*), não os sensores: lá fora continua visível mesmo com pane nos instrumentos.
  */
 public final class OutsideView implements Disposable {
@@ -28,52 +33,186 @@ public final class OutsideView implements Disposable {
     private static final double NM = 1852;
     private static final double FT = 0.3048;
     private static final double EYE_HEIGHT = 5;
-    private static final double HAZE_START = 10_000;
+    private static final double HAZE_START = 8_000;
     private static final double HAZE_FULL = 60_000;
+    private static final float FAR = Float.MAX_VALUE;
 
-    private static final double RUNWAY_LENGTH = 3240;
+    // Pista 15 (cabeceira na origem, rumo 148°) e o que tem em volta, em coordenadas da pista
+    public static final double RUNWAY_LENGTH = 3240;
     private static final double RUNWAY_HALF_WIDTH = 22.5;
     private static final double RWY_SIN = Math.sin(Math.toRadians(FlightModel.RUNWAY_HEADING));
     private static final double RWY_COS = Math.cos(Math.toRadians(FlightModel.RUNWAY_HEADING));
+    private static final double TAXIWAY_ACROSS = 150;
+    private static final double TAXIWAY_HALF_WIDTH = 11.5;
+    private static final double[] CONNECTORS = {60, 900, 1650, 2400, 3180};
+    private static final double APRON_ALONG_MIN = 1150;
+    private static final double APRON_ALONG_MAX = 2050;
+    private static final double APRON_ACROSS_MIN = 175;
+    private static final double APRON_ACROSS_MAX = 330;
+    private static final double PAPI_ALONG = 420;
+    private static final double[] PAPI_ANGLES = {3.5, 3.17, 2.83, 2.5}; // do mais perto da pista para fora
+
     private static final double CITY_X = -9000;
     private static final double CITY_Y = 7000;
     private static final double CITY_RADIUS = 4000;
+    private static final double BLOCK = 160;
+    private static final double STREET = 22;
+    private static final double FIELD = 600;
+    private static final double ROAD_SPACING = 2400;
+
+    // Nuvens: camada de cúmulos esparsos, uns 4900 ft acima do aeródromo, levada pelo vento
+    private static final double CLOUD_ALT = 1500;
+    private static final double CLOUD_FAR = 45_000;
+    private static final double CLOUD_SCALE = 2200;
+    private static final double CLOUD_THICKNESS = 120;
+    private static final double WIND_X = 7;
+    private static final double WIND_Y = 4;
+    private static final double SUN_DX = 0.45;
+    private static final double SUN_DY = 0.30;
 
     private static final int SKY_TOP = 0x2a58b8ff;
     private static final int HAZE = 0xb4cce4ff;
+    private static final int MOUNTAIN = 0x6f84a8ff;
+    private static final int MOUNTAIN_FAR = 0x93a6c4ff;
+    private static final int CLOUD_TOP = 0xf6f8fcff;
+    private static final int CLOUD_EDGE = 0xdfe4ecff;
+    private static final int CLOUD_BASE = 0xaeb4c0ff;
+    private static final int FOG = 0xe6eaf0ff;
     private static final int ASPHALT = 0x45494eff;
+    private static final int RUBBER = 0x34373bff;
+    private static final int TAXIWAY = 0x55585cff;
+    private static final int TAXI_LINE = 0xe8c838ff;
+    private static final int CONCRETE = 0x8e8e8aff;
     private static final int PAINT = 0xeeeeeeff;
     private static final int AIRPORT_GRASS = 0x6cb44aff;
     private static final int ROAD = 0x7a7a72ff;
-    private static final int STREET = 0x4a4a52ff;
+    private static final int STREET_COLOR = 0x4a4a52ff;
     private static final int[] FIELDS = {0x4c9a2aff, 0x5aa832ff, 0x3f8a24ff, 0xb0a448ff, 0x8a6a3aff, 0x66b03aff};
-    private static final int[] BUILDINGS = {0x9a9aa2ff, 0x8a8a90ff, 0xb0aaa0ff, 0x7c8088ff};
+    private static final int[] BUILDINGS = {0x9a9aa2ff, 0x8a8a90ff, 0xb0aaa0ff, 0x7c8088ff, 0xa89a88ff};
+    private static final int[] TREES = {0x2f6a24ff, 0x3a7a2aff, 0x285c20ff};
+    private static final int EDGE_LIGHT = 0xfff4d0ff;
+    private static final int APPROACH_LIGHT = 0xfff0b0ff;
+    private static final int STROBE = 0xffffffff;
+    private static final int GREEN_LIGHT = 0x40ff60ff;
+    private static final int RED_LIGHT = 0xff3030ff;
 
     private final Pixmap pixmap = new Pixmap(WIDTH, HEIGHT, Pixmap.Format.RGBA8888);
     private final Texture texture = new Texture(pixmap);
     private final int[] pixels = new int[WIDTH * HEIGHT];
+    private final float[] depth = new float[WIDTH * HEIGHT];
+
+    // Câmera do quadro atual
+    private double camX, camY, camZ;
+    private double fx, fy, fz, rx, ry, rz, ux, uy, uz;
+    private double r0x, r0y;
+    private double windX, windY;
+
+    // Tremida da cabine: vibração na corrida e solavanco no toque
+    private final java.util.Random random = new java.util.Random(7);
+    private long lastNanos;
+    private boolean wasOnGround = true;
+    private double bumpAmplitude;
+    private double bumpTime;
 
     public OutsideView() {
         texture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
     }
 
     public Texture render(DataBus bus) {
-        double camX = bus.getDouble(Labels.TRUE_POS_X, 0) * NM;
-        double camY = bus.getDouble(Labels.TRUE_POS_Y, 0) * NM;
-        double height = bus.getDouble(Labels.SIM_RADIO_ALT, 0) * FT + EYE_HEIGHT;
-        double hdg = Math.toRadians(bus.getDouble(Labels.TRUE_HDG, 0));
-        double pitch = Math.toRadians(bus.getDouble(Labels.TRUE_PITCH, 0));
-        double bank = Math.toRadians(bus.getDouble(Labels.TRUE_ROLL, 0));
+        double delta = frameDelta(bus);
+        camX = bus.getDouble(Labels.TRUE_POS_X, 0) * NM;
+        camY = bus.getDouble(Labels.TRUE_POS_Y, 0) * NM;
+        camZ = bus.getDouble(Labels.SIM_RADIO_ALT, 0) * FT + EYE_HEIGHT;
+        double simTime = bus.getDouble(Labels.SIM_TIME, 0);
+        windX = simTime * WIND_X;
+        windY = simTime * WIND_Y;
 
+        double hdg = Math.toRadians(bus.getDouble(Labels.TRUE_HDG, 0));
+        double pitch = Math.toRadians(bus.getDouble(Labels.TRUE_PITCH, 0) + shake(bus, delta));
+        double bank = Math.toRadians(bus.getDouble(Labels.TRUE_ROLL, 0));
+        setupCamera(hdg, pitch, bank);
+
+        Arrays.fill(depth, FAR);
+        renderPlanes();
+        if (camZ < 1200) {
+            trees();
+        }
+        if (camZ < 4000) {
+            airportBuildings();
+            city();
+        }
+        lights(simTime);
+        cloudFog();
+
+        IntBuffer buffer = pixmap.getPixels().duplicate().order(ByteOrder.BIG_ENDIAN).asIntBuffer();
+        buffer.put(pixels);
+        texture.draw(pixmap, 0, 0);
+        return texture;
+    }
+
+    // ------------------------------------------------------------------ câmera
+
+    private void setupCamera(double hdg, double pitch, double bank) {
         // Eixos da câmera no mundo (x = leste, y = norte, z = para cima)
         double sh = Math.sin(hdg), ch = Math.cos(hdg), sp = Math.sin(pitch), cp = Math.cos(pitch);
         double sb = Math.sin(bank), cb = Math.cos(bank);
-        double fx = sh * cp, fy = ch * cp, fz = sp;
-        double r0x = ch, r0y = -sh;
+        fx = sh * cp;
+        fy = ch * cp;
+        fz = sp;
+        r0x = ch;
+        r0y = -sh;
         double u0x = -sh * sp, u0y = -ch * sp, u0z = cp;
-        double rx = r0x * cb - u0x * sb, ry = r0y * cb - u0y * sb, rz = -u0z * sb;
-        double ux = u0x * cb + r0x * sb, uy = u0y * cb + r0y * sb, uz = u0z * cb;
+        rx = r0x * cb - u0x * sb;
+        ry = r0y * cb - u0y * sb;
+        rz = -u0z * sb;
+        ux = u0x * cb + r0x * sb;
+        uy = u0y * cb + r0y * sb;
+        uz = u0z * cb;
+    }
 
+    /** Projeta um ponto do mundo na tela: {coluna, linha, distância}, ou null se está atrás do olho. */
+    private final double[] projected = new double[3];
+
+    private boolean project(double x, double y, double z) {
+        double dx = x - camX, dy = y - camY, dz = z - camZ;
+        double forward = dx * fx + dy * fy + dz * fz;
+        if (forward < 1) {
+            return false;
+        }
+        projected[0] = WIDTH / 2.0 + (dx * rx + dy * ry + dz * rz) / forward * FOCAL;
+        projected[1] = BORESIGHT_ROW - (dx * ux + dy * uy + dz * uz) / forward * FOCAL;
+        projected[2] = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        return true;
+    }
+
+    private double frameDelta(DataBus bus) {
+        long now = System.nanoTime();
+        double delta = lastNanos == 0 ? 0 : Math.min(0.1, (now - lastNanos) / 1e9);
+        lastNanos = now;
+        return bus.getBoolean(Labels.SIM_FREEZE) ? 0 : delta;
+    }
+
+    /** Graus de arfagem extra: trepidação proporcional à velocidade no chão e um solavanco amortecido no toque. */
+    private double shake(DataBus bus, double delta) {
+        boolean onGround = bus.getBoolean(Labels.SIM_ON_GROUND);
+        double gs = bus.getDouble(Labels.TRUE_GS, 0);
+        if (onGround && !wasOnGround) {
+            double sink = Math.abs(bus.getDouble(Labels.TRUE_VS, 0));
+            bumpAmplitude = Math.max(0.25, Math.min(1.5, sink / 400));
+            bumpTime = 0;
+        }
+        wasOnGround = onGround;
+        bumpTime += delta;
+        bumpAmplitude *= Math.exp(-delta * 5);
+        double bump = bumpAmplitude * Math.sin(bumpTime * 28);
+        double rumble = onGround && delta > 0 ? (random.nextDouble() - 0.5) * 0.18 * Math.min(1, gs / 120) : 0;
+        return bump + rumble;
+    }
+
+    // ------------------------------------------------------------------ céu, nuvens e chão
+
+    private void renderPlanes() {
+        boolean belowClouds = camZ < CLOUD_ALT;
         for (int row = 0; row < HEIGHT; row++) {
             double v = BORESIGHT_ROW - row - 0.5;
             for (int col = 0; col < WIDTH; col++) {
@@ -82,56 +221,502 @@ public final class OutsideView implements Disposable {
                 double dy = fy * FOCAL + ry * u + uy * v;
                 double dz = fz * FOCAL + rz * u + uz * v;
                 double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                int index = row * WIDTH + col;
                 int color;
                 if (dz >= 0) {
-                    color = mix(HAZE, SKY_TOP, Math.min(1, dz / length * 3));
+                    color = sky(dx, dy, dz, length);
+                    if (belowClouds && dz > 0) {
+                        double t = (CLOUD_ALT - camZ) / dz;
+                        color = cloudLayer(color, camX + dx * t, camY + dy * t, t * length, false);
+                    }
                 } else {
-                    double t = height / -dz;
+                    double t = camZ / -dz;
                     double distance = t * length;
-                    color = distance > HAZE_FULL ? HAZE
-                            : mix(ground(camX + dx * t, camY + dy * t), HAZE,
-                            clamp((distance - HAZE_START) / (HAZE_FULL - HAZE_START)));
+                    double gx = camX + dx * t, gy = camY + dy * t;
+                    if (distance > HAZE_FULL) {
+                        color = HAZE;
+                    } else {
+                        // Tamanho do pixel no chão: decide quanto detalhe dá para mostrar sem cintilar
+                        double grazing = Math.max(0.03, -dz / length);
+                        double footprint = distance / FOCAL / grazing;
+                        color = ground(gx, gy, footprint);
+                        if (distance < 20_000) {
+                            color = shade(color, 1 - 0.3 * cloudCover(gx + CLOUD_ALT * SUN_DX, gy + CLOUD_ALT * SUN_DY));
+                        }
+                        color = mix(color, HAZE, clamp((distance - HAZE_START) / (HAZE_FULL - HAZE_START)));
+                        depth[index] = (float) distance;
+                    }
+                    if (!belowClouds) {
+                        double tc = (camZ - CLOUD_ALT) / -dz;
+                        int withClouds = cloudLayer(color, camX + dx * tc, camY + dy * tc, tc * length, true);
+                        if (withClouds != color) {
+                            color = withClouds;
+                            depth[index] = (float) Math.min(depth[index], tc * length);
+                        }
+                    }
                 }
-                pixels[row * WIDTH + col] = color;
+                pixels[index] = color;
             }
         }
-
-        IntBuffer buffer = pixmap.getPixels().duplicate().order(ByteOrder.BIG_ENDIAN).asIntBuffer();
-        buffer.put(pixels);
-        texture.draw(pixmap, 0, 0);
-        return texture;
     }
 
-    private static int ground(double x, double y) {
+    /** Degradê do céu e, perto do horizonte, uma serra distante que só gira com a proa: referência de direção. */
+    private static int sky(double dx, double dy, double dz, double length) {
+        double elevation = dz / length;
+        double azimuth = Math.atan2(dx, dy);
+        double ridge = mountainHeight(azimuth);
+        if (elevation < ridge) {
+            // Duas camadas: a serra mais distante e mais clara atrás, a mais próxima e escura na frente
+            double near = mountainHeight(azimuth * 2 + 2.1) * 0.55;
+            return elevation < near ? MOUNTAIN : MOUNTAIN_FAR;
+        }
+        return mix(HAZE, SKY_TOP, Math.min(1, elevation * 3));
+    }
+
+    /** Altura angular da serra (em seno do ângulo), uma função contínua da direção. */
+    private static double mountainHeight(double azimuth) {
+        double h = 0.55 + 0.45 * Math.sin(azimuth * 3 + 1)
+                + 0.30 * Math.sin(azimuth * 7 + 2)
+                + 0.18 * Math.sin(azimuth * 17 + 0.5)
+                + 0.08 * Math.sin(azimuth * 41 + 4);
+        double range = 0.5 + 0.5 * Math.sin(azimuth + 0.8); // mais alta para um lado, quase plana do outro
+        return Math.max(0, h) * range * 0.022;
+    }
+
+    /** Mistura a nuvem (se houver) sobre a cor de fundo. {@code fromAbove}: vista de cima, topo branco. */
+    private int cloudLayer(int background, double x, double y, double distance, boolean fromAbove) {
+        if (distance > CLOUD_FAR) {
+            return background;
+        }
+        double cover = cloudCover(x, y);
+        if (cover <= 0) {
+            return background;
+        }
+        int cloud = fromAbove ? mix(CLOUD_EDGE, CLOUD_TOP, cover) : mix(CLOUD_EDGE, CLOUD_BASE, cover);
+        cloud = mix(cloud, HAZE, clamp(distance / CLOUD_FAR) * 0.7);
+        double alpha = Math.min(1, cover * 1.6) * (1 - clamp((distance - CLOUD_FAR * 0.6) / (CLOUD_FAR * 0.4)));
+        return mix(background, cloud, alpha);
+    }
+
+    /** 0 = céu limpo, 1 = miolo da nuvem. */
+    private double cloudCover(double x, double y) {
+        double n = fbm((x - windX) / CLOUD_SCALE, (y - windY) / CLOUD_SCALE);
+        return clamp((n - 0.56) / 0.14);
+    }
+
+    /** Dentro da camada de nuvens a vista inteira some no branco. */
+    private void cloudFog() {
+        double gap = Math.abs(camZ - CLOUD_ALT);
+        if (gap >= CLOUD_THICKNESS) {
+            return;
+        }
+        double amount = cloudCover(camX, camY) * (1 - gap / CLOUD_THICKNESS) * 1.4;
+        if (amount <= 0) {
+            return;
+        }
+        amount = Math.min(0.97, amount);
+        for (int i = 0; i < pixels.length; i++) {
+            pixels[i] = mix(pixels[i], FOG, amount);
+        }
+    }
+
+    private static int ground(double x, double y, double footprint) {
         double along = x * RWY_SIN + y * RWY_COS;
         double across = x * RWY_COS - y * RWY_SIN;
-        if (along > -120 && along < RUNWAY_LENGTH + 120 && Math.abs(across) < 160) {
-            if (along >= 0 && along <= RUNWAY_LENGTH && Math.abs(across) <= RUNWAY_HALF_WIDTH) {
-                return runway(along, Math.abs(across));
-            }
-            return AIRPORT_GRASS;
+        if (along > -150 && along < RUNWAY_LENGTH + 150 && across > -170 && across < 420) {
+            return airport(along, across, footprint);
         }
         if (Math.hypot(x - CITY_X, y - CITY_Y) < CITY_RADIUS) {
-            if (Math.floorMod((long) x, 160) < 22 || Math.floorMod((long) y, 160) < 22) {
-                return STREET;
+            if (Math.floorMod((long) x, (long) BLOCK) < STREET || Math.floorMod((long) y, (long) BLOCK) < STREET) {
+                return STREET_COLOR;
             }
-            return BUILDINGS[hash(Math.floorDiv((long) x, 160), Math.floorDiv((long) y, 160)) % BUILDINGS.length];
+            return BUILDINGS[hash(Math.floorDiv((long) x, (long) BLOCK), Math.floorDiv((long) y, (long) BLOCK))
+                    % BUILDINGS.length];
         }
-        if (Math.floorMod((long) x, 2400) < 14 || Math.floorMod((long) y, 2400) < 14) {
+        if (Math.floorMod((long) x, (long) ROAD_SPACING) < 14 || Math.floorMod((long) y, (long) ROAD_SPACING) < 14) {
             return ROAD;
         }
-        return FIELDS[hash(Math.floorDiv((long) x, 600), Math.floorDiv((long) y, 600)) % FIELDS.length];
+        return farmland(x, y, footprint);
     }
 
-    /** Marcações da pista: bordas, faixas de cabeceira, ponto de toque e linha central tracejada. */
-    private static int runway(double along, double across) {
+    /**
+     * Plantações em três escalas. Cada detalhe só aparece quando o pixel é pequeno o bastante para mostrá-lo:
+     * de longe, manchas de 600 m; mais perto, variação de 60 m; rente ao chão, fileiras de plantio e
+     * granulado de poucos metros, que passam correndo e dão a sensação de velocidade.
+     */
+    private static int farmland(double x, double y, double footprint) {
+        long fieldX = Math.floorDiv((long) x, (long) FIELD);
+        long fieldY = Math.floorDiv((long) y, (long) FIELD);
+        int field = hash(fieldX, fieldY);
+        int color = FIELDS[field % FIELDS.length];
+        if (footprint < 30) {
+            color = shade(color, 0.95 + 0.1 * (hash(Math.floorDiv((long) x, 60), Math.floorDiv((long) y, 60)) % 100) / 100.0);
+        }
+        if (footprint < 2.5 && (field & 8) == 0) {
+            double rows = (field & 16) == 0 ? x : y;
+            if (Math.floorMod((long) Math.floor(rows / 3), 2) == 0) {
+                color = shade(color, 0.86);
+            }
+        }
+        if (footprint < 6) {
+            color = shade(color, 0.92 + 0.14 * (hash(Math.floorDiv((long) x, 4), Math.floorDiv((long) y, 4)) % 100) / 100.0);
+        }
+        return color;
+    }
+
+    private static int airport(double along, double across, double footprint) {
+        double side = Math.abs(across);
+        if (along >= 0 && along <= RUNWAY_LENGTH && side <= RUNWAY_HALF_WIDTH) {
+            return runway(along, side, footprint);
+        }
+        boolean taxiway = Math.abs(across - TAXIWAY_ACROSS) <= TAXIWAY_HALF_WIDTH && along > 30 && along < RUNWAY_LENGTH - 30;
+        boolean connector = false;
+        for (double c : CONNECTORS) {
+            if (Math.abs(along - c) <= TAXIWAY_HALF_WIDTH && across > 0 && across < TAXIWAY_ACROSS) {
+                connector = true;
+                break;
+            }
+        }
+        if (taxiway || connector) {
+            boolean centerline = taxiway ? Math.abs(across - TAXIWAY_ACROSS) < 0.6 : Math.abs(along - nearest(along)) < 0.6;
+            return centerline && footprint < 4 ? TAXI_LINE : TAXIWAY;
+        }
+        if (along > APRON_ALONG_MIN && along < APRON_ALONG_MAX && across > APRON_ACROSS_MIN && across < APRON_ACROSS_MAX) {
+            boolean joint = footprint < 3 && (Math.floorMod((long) along, 25) < 1 || Math.floorMod((long) across, 25) < 1);
+            return joint ? shade(CONCRETE, 0.85) : CONCRETE;
+        }
+        int grass = AIRPORT_GRASS;
+        if (footprint < 6) {
+            grass = shade(grass, 0.93 + 0.12 * (hash((long) Math.floor(along / 5), (long) Math.floor(across / 5)) % 100) / 100.0);
+        }
+        return grass;
+    }
+
+    private static double nearest(double along) {
+        double best = CONNECTORS[0];
+        for (double c : CONNECTORS) {
+            if (Math.abs(along - c) < Math.abs(along - best)) {
+                best = c;
+            }
+        }
+        return best;
+    }
+
+    /** Marcações da pista: bordas, faixas de cabeceira, zona de toque, ponto de visada, linha central e marcas de pneu. */
+    private static int runway(double along, double across, double footprint) {
+        double fromEnd = Math.min(along, RUNWAY_LENGTH - along);
         boolean edge = across > RUNWAY_HALF_WIDTH - 1.2;
-        boolean threshold = (along < 45 || along > RUNWAY_LENGTH - 45)
-                && across < RUNWAY_HALF_WIDTH - 3 && Math.floorMod((long) (across * 10), 36) < 18;
-        boolean aimingPoint = along > 400 && along < 460 && across > 5 && across < 10;
-        boolean centerline = across < 0.9 && along > 80 && along < RUNWAY_LENGTH - 80
-                && Math.floorMod((long) along, 50) < 30;
-        return edge || threshold || aimingPoint || centerline ? PAINT : ASPHALT;
+        boolean threshold = fromEnd < 45 && across < RUNWAY_HALF_WIDTH - 3 && Math.floorMod((long) (across * 10), 36) < 18;
+        boolean aimingPoint = fromEnd > 400 && fromEnd < 460 && across > 5 && across < 10;
+        boolean touchdown = fromEnd > 150 && fromEnd < 900 && Math.floorMod((long) fromEnd, 150) < 22
+                && across > 3.5 && across < 3.5 + 1.8 * (1 + (fromEnd < 300 ? 2 : fromEnd < 600 ? 1 : 0));
+        boolean centerline = across < 0.9 && fromEnd > 80 && Math.floorMod((long) along, 50) < 30;
+        if (edge || threshold || aimingPoint || touchdown || centerline) {
+            return PAINT;
+        }
+        // Borracha dos pneus escurece a zona de toque, mais no meio
+        if (fromEnd > 250 && fromEnd < 1000 && across < 9) {
+            double wear = (1 - across / 9) * (1 - Math.abs(fromEnd - 600) / 400);
+            if (footprint < 4) {
+                wear *= 0.6 + 0.8 * (hash((long) Math.floor(along / 3), (long) Math.floor(across)) % 100) / 100.0;
+            }
+            return mix(ASPHALT, RUBBER, clamp(wear));
+        }
+        return ASPHALT;
+    }
+
+    // ------------------------------------------------------------------ objetos com altura
+
+    /** Árvores perto do avião: muitas nas divisas das plantações (cercas vivas), algumas soltas no meio. */
+    private void trees() {
+        double radius = 1800;
+        double cell = 55;
+        long minX = Math.floorDiv((long) (camX - radius), (long) cell);
+        long maxX = Math.floorDiv((long) (camX + radius), (long) cell);
+        long minY = Math.floorDiv((long) (camY - radius), (long) cell);
+        long maxY = Math.floorDiv((long) (camY + radius), (long) cell);
+        for (long cx = minX; cx <= maxX; cx++) {
+            for (long cy = minY; cy <= maxY; cy++) {
+                int h = hash(cx * 31 + 7, cy * 17 + 3);
+                double x = cx * cell + (h % 37);
+                double y = cy * cell + ((h / 37) % 37);
+                // Frente da câmera apenas (barato descartar antes de qualquer outra conta)
+                if ((x - camX) * fx + (y - camY) * fy < 0) {
+                    continue;
+                }
+                boolean hedge = Math.floorMod((long) x, (long) FIELD) < cell || Math.floorMod((long) y, (long) FIELD) < cell;
+                if (h % 100 >= (hedge ? 70 : 6) || !isFarmland(x, y)) {
+                    continue;
+                }
+                double height = 7 + (h % 9);
+                double halfWidth = 2.5 + (h % 4);
+                billboard(x, y, 0, height, halfWidth, TREES[(h / 7) % TREES.length]);
+            }
+        }
+    }
+
+    private static boolean isFarmland(double x, double y) {
+        double along = x * RWY_SIN + y * RWY_COS;
+        double across = x * RWY_COS - y * RWY_SIN;
+        if (along > -400 && along < RUNWAY_LENGTH + 400 && across > -300 && across < 550) {
+            return false;
+        }
+        if (along < 0 && along > -1200 && Math.abs(across) < 120) {
+            return false; // área livre das luzes de aproximação
+        }
+        if (Math.hypot(x - CITY_X, y - CITY_Y) < CITY_RADIUS + 100) {
+            return false;
+        }
+        return Math.floorMod((long) x, (long) ROAD_SPACING) > 30 && Math.floorMod((long) y, (long) ROAD_SPACING) > 30;
+    }
+
+    /** Terminal, hangar e torre ao lado do pátio. */
+    private void airportBuildings() {
+        box(APRON_ALONG_MIN + 80, APRON_ACROSS_MAX + 15, APRON_ALONG_MAX - 80, APRON_ACROSS_MAX + 55, 16, 0xb8b4aaff);
+        box(APRON_ALONG_MAX + 60, APRON_ACROSS_MIN + 20, APRON_ALONG_MAX + 160, APRON_ACROSS_MIN + 90, 22, 0x9aa2acff);
+        double towerAlong = APRON_ALONG_MIN - 60;
+        double towerAcross = APRON_ACROSS_MAX + 20;
+        box(towerAlong - 4, towerAcross - 4, towerAlong + 4, towerAcross + 4, 38, 0xc8c4bcff);
+        box(towerAlong - 8, towerAcross - 8, towerAlong + 8, towerAcross + 8, 46, 0x30404cff, 38);
+    }
+
+    /** Prédios da cidade, mais altos no centro. Só os que estão na frente e a menos de 9 km. */
+    private void city() {
+        double reach = 9000;
+        double toCity = Math.hypot(CITY_X - camX, CITY_Y - camY);
+        if (toCity - CITY_RADIUS > reach) {
+            return;
+        }
+        long min = Math.floorDiv((long) -CITY_RADIUS, (long) BLOCK);
+        long max = Math.floorDiv((long) CITY_RADIUS, (long) BLOCK);
+        long baseX = Math.floorDiv((long) CITY_X, (long) BLOCK);
+        long baseY = Math.floorDiv((long) CITY_Y, (long) BLOCK);
+        for (long bx = baseX + min; bx <= baseX + max; bx++) {
+            for (long by = baseY + min; by <= baseY + max; by++) {
+                double x0 = bx * BLOCK + STREET;
+                double y0 = by * BLOCK + STREET;
+                double cx = x0 + (BLOCK - STREET) / 2, cy = y0 + (BLOCK - STREET) / 2;
+                double fromCenter = Math.hypot(cx - CITY_X, cy - CITY_Y);
+                if (fromCenter > CITY_RADIUS - 80) {
+                    continue;
+                }
+                double dx = cx - camX, dy = cy - camY;
+                if (dx * fx + dy * fy < -200 || Math.hypot(dx, dy) > reach) {
+                    continue;
+                }
+                int h = hash(bx, by);
+                if (h % 10 == 0) {
+                    continue; // praça
+                }
+                double centrality = 1 - fromCenter / CITY_RADIUS;
+                double height = 8 + (h % 20) + centrality * centrality * (h % 90);
+                double inset = 6 + (h % 25);
+                double size = BLOCK - STREET;
+                worldBox(x0 + inset, y0 + inset, x0 + size - inset, y0 + size - inset, height,
+                        BUILDINGS[h % BUILDINGS.length], 0);
+            }
+        }
+    }
+
+    /** Caixa em coordenadas da pista (along, across). */
+    private void box(double a0, double c0, double a1, double c1, double height, int color) {
+        box(a0, c0, a1, c1, height, color, 0);
+    }
+
+    private void box(double a0, double c0, double a1, double c1, double top, int color, double bottom) {
+        double[][] corners = {{a0, c0}, {a1, c0}, {a1, c1}, {a0, c1}};
+        double[] xs = new double[4], ys = new double[4];
+        for (int i = 0; i < 4; i++) {
+            xs[i] = corners[i][0] * RWY_SIN + corners[i][1] * RWY_COS;
+            ys[i] = corners[i][0] * RWY_COS - corners[i][1] * RWY_SIN;
+        }
+        prism(xs, ys, bottom, top, color);
+    }
+
+    /** Caixa alinhada aos eixos do mundo (quarteirões da cidade). */
+    private void worldBox(double x0, double y0, double x1, double y1, double top, int color, double bottom) {
+        prism(new double[]{x0, x1, x1, x0}, new double[]{y0, y0, y1, y1}, bottom, top, color);
+    }
+
+    /** Quatro paredes (sombreadas conforme a face) e o telhado. */
+    private void prism(double[] xs, double[] ys, double bottom, double top, int color) {
+        for (int i = 0; i < 4; i++) {
+            int j = (i + 1) % 4;
+            // Face voltada para o olho? (normal para fora vs. vetor até a câmera)
+            double ex = xs[j] - xs[i], ey = ys[j] - ys[i];
+            double nx = ey, ny = -ex;
+            double mx = (xs[i] + xs[j]) / 2 - camX, my = (ys[i] + ys[j]) / 2 - camY;
+            double facing = nx * mx + ny * my;
+            double centerX = (xs[0] + xs[2]) / 2, centerY = (ys[0] + ys[2]) / 2;
+            double outward = nx * ((xs[i] + xs[j]) / 2 - centerX) + ny * ((ys[i] + ys[j]) / 2 - centerY);
+            if (facing * outward >= 0) {
+                continue;
+            }
+            double light = 0.72 + 0.28 * Math.abs(nx * SUN_DX + ny * SUN_DY) / Math.hypot(nx, ny) / Math.hypot(SUN_DX, SUN_DY);
+            quad(xs[i], ys[i], bottom, xs[j], ys[j], bottom, xs[j], ys[j], top, xs[i], ys[i], top, shade(color, light));
+        }
+        if (camZ > top) {
+            quad(xs[0], ys[0], top, xs[1], ys[1], top, xs[2], ys[2], top, xs[3], ys[3], top, shade(color, 1.12));
+        }
+    }
+
+    /** Retângulo vertical sempre de frente para o olho (árvore). */
+    private void billboard(double x, double y, double bottom, double top, double halfWidth, int color) {
+        double ox = r0x * halfWidth, oy = r0y * halfWidth;
+        double crown = bottom + (top - bottom) * 0.25;
+        quad(x - ox * 0.25, y - oy * 0.25, bottom, x + ox * 0.25, y + oy * 0.25, bottom,
+                x + ox * 0.25, y + oy * 0.25, crown, x - ox * 0.25, y - oy * 0.25, crown, 0x4a3a2aff);
+        quad(x - ox, y - oy, crown, x + ox, y + oy, crown, x + ox * 0.55, y + oy * 0.55, top,
+                x - ox * 0.55, y - oy * 0.55, top, color);
+    }
+
+    private final double[] qx = new double[4], qy = new double[4];
+
+    /** Preenche um quadrilátero convexo do mundo, com teste de profundidade (uma profundidade por quad). */
+    private void quad(double x1, double y1, double z1, double x2, double y2, double z2,
+                      double x3, double y3, double z3, double x4, double y4, double z4, int color) {
+        double[][] p = {{x1, y1, z1}, {x2, y2, z2}, {x3, y3, z3}, {x4, y4, z4}};
+        double dist = Double.MAX_VALUE;
+        double minC = Double.MAX_VALUE, maxC = -Double.MAX_VALUE, minR = Double.MAX_VALUE, maxR = -Double.MAX_VALUE;
+        for (int i = 0; i < 4; i++) {
+            if (!project(p[i][0], p[i][1], p[i][2])) {
+                return;
+            }
+            qx[i] = projected[0];
+            qy[i] = projected[1];
+            dist = Math.min(dist, projected[2]); // o canto mais perto: o chão logo atrás da base não cobre a parede
+            minC = Math.min(minC, qx[i]);
+            maxC = Math.max(maxC, qx[i]);
+            minR = Math.min(minR, qy[i]);
+            maxR = Math.max(maxR, qy[i]);
+        }
+        int c0 = Math.max(0, (int) Math.floor(minC)), c1 = Math.min(WIDTH - 1, (int) Math.ceil(maxC));
+        int r0 = Math.max(0, (int) Math.floor(minR)), r1 = Math.min(HEIGHT - 1, (int) Math.ceil(maxR));
+        if (c0 > c1 || r0 > r1) {
+            return;
+        }
+        float d = (float) dist;
+        int fogged = mix(color, HAZE, clamp((dist - HAZE_START) / (HAZE_FULL - HAZE_START)));
+        // Sinal da área decide a orientação dos lados
+        double area = 0;
+        for (int i = 0; i < 4; i++) {
+            int j = (i + 1) % 4;
+            area += qx[i] * qy[j] - qx[j] * qy[i];
+        }
+        double sign = Math.signum(area);
+        if (sign == 0) {
+            return;
+        }
+        boolean tiny = c1 - c0 <= 1 && r1 - r0 <= 1;
+        for (int row = r0; row <= r1; row++) {
+            double py = row + 0.5;
+            for (int col = c0; col <= c1; col++) {
+                double px = col + 0.5;
+                if (!tiny && !inside(px, py, sign)) {
+                    continue;
+                }
+                int index = row * WIDTH + col;
+                if (d < depth[index]) {
+                    depth[index] = d;
+                    pixels[index] = fogged;
+                }
+            }
+        }
+    }
+
+    private boolean inside(double px, double py, double sign) {
+        for (int i = 0; i < 4; i++) {
+            int j = (i + 1) % 4;
+            double cross = (qx[j] - qx[i]) * (py - qy[i]) - (qy[j] - qy[i]) * (px - qx[i]);
+            if (cross * sign < 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // ------------------------------------------------------------------ luzes
+
+    private void lights(double simTime) {
+        // Borda da pista, a cada 60 m dos dois lados
+        for (double a = 0; a <= RUNWAY_LENGTH; a += 60) {
+            light(a, -RUNWAY_HALF_WIDTH - 1.5, EDGE_LIGHT, false);
+            light(a, RUNWAY_HALF_WIDTH + 1.5, EDGE_LIGHT, false);
+        }
+        // Cabeceira verde (quem pousa na 15 vê) e fim de pista vermelho
+        for (double c = -RUNWAY_HALF_WIDTH; c <= RUNWAY_HALF_WIDTH; c += 3) {
+            light(-2, c, GREEN_LIGHT, false);
+            light(RUNWAY_LENGTH + 2, c, RED_LIGHT, false);
+        }
+        // Luzes de aproximação: barras a cada 30 m até 900 m antes da pista, barra transversal a 300 m,
+        // e o "coelho": um strobe que corre de fora para dentro duas vezes por segundo, apontando a pista
+        int bars = 30;
+        int rabbit = (int) ((simTime * 2 % 1) * bars);
+        for (int i = 0; i < bars; i++) {
+            double a = -900 + i * 30;
+            for (int k = -2; k <= 2; k++) {
+                light(a, k * 2.2, APPROACH_LIGHT, false);
+            }
+            if (i == rabbit) {
+                light(a, 0, STROBE, true);
+            }
+        }
+        for (double c = -15; c <= 15; c += 2.5) {
+            light(-300, c, APPROACH_LIGHT, false);
+        }
+        // PAPI à esquerda: 4 luzes que ficam brancas acima do seu ângulo; na rampa certa, 2 brancas e 2 vermelhas
+        for (int i = 0; i < PAPI_ANGLES.length; i++) {
+            double across = -(RUNWAY_HALF_WIDTH + 15 + i * 9);
+            double x = PAPI_ALONG * RWY_SIN + across * RWY_COS;
+            double y = PAPI_ALONG * RWY_COS - across * RWY_SIN;
+            double angle = Math.toDegrees(Math.atan2(camZ - 1, Math.hypot(camX - x, camY - y)));
+            light(PAPI_ALONG, across, angle > PAPI_ANGLES[i] ? STROBE : RED_LIGHT, true);
+        }
+    }
+
+    private void light(double along, double across, int color, boolean bright) {
+        double x = along * RWY_SIN + across * RWY_COS;
+        double y = along * RWY_COS - across * RWY_SIN;
+        if (!project(x, y, 0.8)) {
+            return;
+        }
+        double distance = projected[2];
+        if (distance > 25_000) {
+            return;
+        }
+        int col = (int) Math.floor(projected[0]);
+        int row = (int) Math.floor(projected[1]);
+        int size = bright || distance < 350 ? 2 : 1;
+        int fogged = mix(color, HAZE, clamp((distance - 12_000) / 13_000));
+        for (int r = row; r < row + size; r++) {
+            for (int c = col; c < col + size; c++) {
+                if (c < 0 || c >= WIDTH || r < 0 || r >= HEIGHT) {
+                    continue;
+                }
+                int index = r * WIDTH + c;
+                if (distance < depth[index] + 2) {
+                    pixels[index] = fogged;
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ utilitários
+
+    /** Ruído de valor 2D em 3 oitavas, de 0 a 1. */
+    private static double fbm(double x, double y) {
+        return valueNoise(x, y) * 0.55 + valueNoise(x * 2.1 + 17, y * 2.1 + 9) * 0.3
+                + valueNoise(x * 4.3 + 41, y * 4.3 + 23) * 0.15;
+    }
+
+    private static double valueNoise(double x, double y) {
+        long x0 = (long) Math.floor(x), y0 = (long) Math.floor(y);
+        double tx = x - x0, ty = y - y0;
+        tx = tx * tx * (3 - 2 * tx);
+        ty = ty * ty * (3 - 2 * ty);
+        double a = hash(x0, y0) / 1_000_003.0, b = hash(x0 + 1, y0) / 1_000_003.0;
+        double c = hash(x0, y0 + 1) / 1_000_003.0, d = hash(x0 + 1, y0 + 1) / 1_000_003.0;
+        return (a + (b - a) * tx) + ((c + (d - c) * tx) - (a + (b - a) * tx)) * ty;
     }
 
     private static int hash(long a, long b) {
@@ -140,6 +725,13 @@ public final class OutsideView implements Disposable {
         h *= 0x5bd1e995L;
         h ^= h >>> 15;
         return (int) Math.floorMod(h, 1_000_003L);
+    }
+
+    private static int shade(int color, double factor) {
+        int r = (int) Math.min(255, ((color >>> 24) & 0xff) * factor);
+        int g = (int) Math.min(255, ((color >>> 16) & 0xff) * factor);
+        int b = (int) Math.min(255, ((color >>> 8) & 0xff) * factor);
+        return r << 24 | g << 16 | b << 8 | 0xff;
     }
 
     private static int mix(int a, int b, double t) {

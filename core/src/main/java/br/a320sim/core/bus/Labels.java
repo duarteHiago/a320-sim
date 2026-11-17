@@ -98,6 +98,8 @@ public final class Labels {
     public static final String IOS_MESSAGE = "IOS.MESSAGE";
     public static final String IOS_MESSAGE_ID = "IOS.MESSAGE_ID";
     public static final String IOS_FAILURES = "IOS.FAILURES";
+    /** Slots do rack que perderam o cartucho com o avião ligado (lista de nomes de grupo). */
+    public static final String RACK_MISSING = "RACK.MISSING";
 
     /** Labels que o aluno controla (manche, manete, alavancas, FCU) e que viajam do cockpit para o host. */
     public static boolean isPilotInput(String label) {

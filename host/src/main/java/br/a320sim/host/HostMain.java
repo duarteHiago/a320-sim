@@ -4,15 +4,14 @@ import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
 import br.a320sim.core.cartridge.Cartridge;
 import br.a320sim.core.cartridge.CartridgeGroup;
-import br.a320sim.core.cartridge.CartridgeManifest;
 import br.a320sim.core.module.AvionicsModule;
 import br.a320sim.core.module.SelfTestResult;
+import br.a320sim.host.cartridge.AutoReader;
 import br.a320sim.host.cartridge.CartridgeLibrary;
 import br.a320sim.host.cartridge.CartridgeLoader;
 import br.a320sim.host.cartridge.ClasspathModuleFactory;
-import br.a320sim.host.cartridge.DevFolderReader;
+import br.a320sim.host.cartridge.DetectedCartridge;
 
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +23,7 @@ public class HostMain {
 
     private final Host host = new Host();
     private final CartridgeLibrary library = new CartridgeLibrary(
-            new DevFolderReader(Path.of("sd-dev")),
+            AutoReader.fromSystemProperties(),
             new CartridgeLoader(new ClasspathModuleFactory()));
 
     public static void main(String[] args) {
@@ -93,12 +92,13 @@ public class HostMain {
 
     private void drawer() {
         System.out.println("Gaveta de cartuchos:");
-        for (CartridgeManifest m : library.available()) {
+        for (DetectedCartridge d : library.rescan()) {
+            var m = d.manifest();
             boolean inRack = host.rack().slot(m.grupo())
                     .map(c -> c.manifest().partNumber().equals(m.partNumber()))
                     .orElse(false);
-            System.out.printf("  %-14s %-11s %-4s %s%s%n", m.partNumber(), m.grupo(), m.versao(), m.nome(),
-                    inRack ? "   [no rack]" : "");
+            System.out.printf("  %-14s %-11s %-4s %-26s %s%s%n", m.partNumber(), m.grupo(), m.versao(), m.nome(),
+                    d.removable() ? "SD " + d.location() : d.location(), inRack ? "   [no rack]" : "");
         }
     }
 
@@ -122,12 +122,19 @@ public class HostMain {
             System.out.println("Desligue o avião antes de trocar cartuchos no solo.");
             return;
         }
-        Optional<CartridgeManifest> manifest = library.find(partNumber);
+        library.rescan();
+        Optional<DetectedCartridge> manifest = library.find(partNumber);
         if (manifest.isEmpty()) {
             System.out.println("Cartucho '" + partNumber + "' não está na gaveta.");
             return;
         }
-        Cartridge cartridge = library.load(manifest.get());
+        Cartridge cartridge;
+        try {
+            cartridge = library.load(manifest.get());
+        } catch (RuntimeException e) {
+            System.out.println("Cartão ilegível: " + e.getMessage());
+            return;
+        }
         Optional<Cartridge> conflict = host.rack().insert(cartridge);
         if (conflict.isPresent()) {
             System.out.println("CONFLITO: o slot " + cartridge.group() + " já tem " + conflict.get()
@@ -145,13 +152,13 @@ public class HostMain {
             System.out.println("Grupo inválido. Use PLATAFORMA, PROPULSAO ou COCKPIT.");
             return;
         }
-        Optional<Cartridge> removed = host.rack().remove(group);
+        boolean powered = host.isPowered();
+        Optional<Cartridge> removed = host.ejectCartridge(group);
         if (removed.isEmpty()) {
             System.out.println("Slot " + group + " já está vazio.");
             return;
         }
-        if (host.isPowered()) {
-            removed.get().modules().forEach(AvionicsModule::powerDown);
+        if (powered) {
             System.out.println("!! Cartucho arrancado em operação: "
                     + removed.get().modules().stream().map(m -> m.info().friendlyName()).toList()
                     + " PERDERAM O SOFTWARE");
