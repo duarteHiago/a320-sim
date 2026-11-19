@@ -1,22 +1,24 @@
 package br.a320sim.cockpit;
 
+import br.a320sim.cockpit.audio.Sfx;
 import br.a320sim.cockpit.audio.SoundFx;
 import br.a320sim.cockpit.screen.CockpitScreen;
 import br.a320sim.cockpit.screen.ConnectScreen;
+import br.a320sim.cockpit.screen.IntroScreen;
 import br.a320sim.cockpit.screen.IosScreen;
 import br.a320sim.cockpit.screen.RackScreen;
 import br.a320sim.cockpit.screen.TitleScreen;
 import br.a320sim.cockpit.session.LocalSession;
 import br.a320sim.host.Host;
+import br.a320sim.host.cartridge.AutoReader;
 import br.a320sim.host.cartridge.CartridgeLibrary;
 import br.a320sim.host.cartridge.CartridgeLoader;
 import br.a320sim.host.cartridge.ClasspathModuleFactory;
-import br.a320sim.host.cartridge.DevFolderReader;
+import br.a320sim.host.cartridge.HotPlug;
 import br.a320sim.net.SimServer;
 import com.badlogic.gdx.Game;
 
 import java.io.IOException;
-import java.nio.file.Path;
 
 /**
  * O mesmo programa roda nos dois PCs; o papel é escolhido na tela de título:
@@ -26,8 +28,12 @@ public class SimApp extends Game {
 
     public enum Mode { SOLO, INSTRUCTOR, STUDENT }
 
+    /** De quanto em quanto tempo os leitores SD são varridos. */
+    private static final long WATCH_MILLIS = 700;
+
     private Host host;
     private CartridgeLibrary library;
+    private HotPlug hotPlug;
     private SoundFx sound;
     private Mode mode = Mode.SOLO;
     private SimServer server;
@@ -36,8 +42,10 @@ public class SimApp extends Game {
     @Override
     public void create() {
         host = new Host();
-        library = new CartridgeLibrary(new DevFolderReader(Path.of("sd-dev")),
+        library = new CartridgeLibrary(AutoReader.fromSystemProperties(),
                 new CartridgeLoader(new ClasspathModuleFactory()));
+        library.startWatching(WATCH_MILLIS);
+        hotPlug = new HotPlug(host, library);
         sound = new SoundFx();
 
         // Atalhos de linha de comando, usados para testar sem passar pelos menus
@@ -46,10 +54,14 @@ public class SimApp extends Game {
             startInstructor();
         } else if (startMode.equals("aluno")) {
             startStudent();
+        } else if (startMode.equals("solo")) {
+            startSolo();
         } else if (System.getProperty("sim.autostart") != null) {
             startSolo();
-        } else {
+        } else if ("TitleScreen".equals(System.getProperty("sim.shotScreen"))) {
             showTitle();
+        } else {
+            setScreen(new IntroScreen(this));
         }
     }
 
@@ -91,6 +103,21 @@ public class SimApp extends Game {
         }
     }
 
+    /**
+     * Com o avião ligado aqui (SOLO ou INSTRUTOR), cartão arrancado do leitor apaga as caixas dele,
+     * e cartão encaixado num slot vazio carrega na hora. Na tela do rack quem cuida é a própria tela.
+     */
+    @Override
+    public void render() {
+        super.render();
+        if (mode != Mode.STUDENT && host.isPowered()) {
+            for (String event : hotPlug.update()) {
+                System.out.println("[RACK] " + event);
+                sound.play(event.endsWith("CARREGADO") ? Sfx.CHIME : Sfx.ERROR);
+            }
+        }
+    }
+
     /** Erro pendente para a tela de título mostrar (lido uma vez só). */
     public String takeError() {
         String e = error;
@@ -129,6 +156,7 @@ public class SimApp extends Game {
     public void dispose() {
         super.dispose(); // chama hide() da tela atual, que se descarta
         closeServer();
+        library.close();
         sound.dispose();
     }
 }

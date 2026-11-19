@@ -52,6 +52,13 @@ public class Rack {
                 problems.add("Slot " + group + " vazio");
             }
         }
+        problems.addAll(incompatibilities());
+        return new RackReport(problems);
+    }
+
+    /** Só as regras entre cartuchos (ex.: PROPULSAO neo exige COCKPIT neo), ignorando slots vazios. */
+    public List<String> incompatibilities() {
+        List<String> problems = new ArrayList<>();
         for (Cartridge cartridge : slots.values()) {
             for (Requirement req : cartridge.manifest().requer()) {
                 Cartridge other = slots.get(req.grupo());
@@ -61,6 +68,6 @@ public class Rack {
                 }
             }
         }
-        return new RackReport(problems);
+        return problems;
     }
 }

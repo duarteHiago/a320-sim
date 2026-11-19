@@ -24,6 +24,34 @@ Simulador de A320 com estética de console retrô. As "caixas pretas" do avião 
 
 Regra: **PROPULSAO neo exige COCKPIT neo**.
 
+## Cartões SD
+
+Cada cartão leva só dois arquivos na raiz: `cartridge.json` (o manifesto) e `caixas.jar` (o software das duas caixas daquele cartão). O simulador varre os leitores a cada ~0,7 s; o **grupo vem do manifesto**, então não importa em qual leitor do hub o cartão entra.
+
+**Gravar os 6 cartões** (uma vez, ou de novo quando o software das caixas mudar). Com o cartão no leitor, veja a letra dele no Explorer e rode:
+
+```
+gradlew :cartridges:gravarSd -Pcartao=PLT-A320-CEO -Pdrive=G
+```
+
+Repita para `PLT-A320-NEO`, `PRP-A320-CEO`, `PRP-A320-NEO`, `CKP-A320-CEO` e `CKP-A320-NEO`, e etiquete cada cartão. A tarefa só copia os dois arquivos (não formata); ela recusa a unidade do sistema, a do projeto e qualquer unidade com mais de 64 GB. `gradlew :cartridges:sdImages` só gera as imagens em `cartridges/build/sd/`.
+
+**Usando:**
+
+- Na tela **MONTE SEU A320**, encaixar um cartão no leitor coloca ele direto no slot do grupo dele; tirar o cartão esvazia o slot. As setas continuam funcionando quando há mais de um cartão do mesmo grupo plugado.
+- **Com o avião ligado**, tirar um cartão desliga as caixas dele na hora (ex.: sem o COCKPIT as telas apagam e os alarmes somem) e aparece **CARTUCHO REMOVIDO** no cockpit e no log do instrutor. Encaixar de volta (em qualquer leitor) faz o *data loading* e as caixas religam com self-test; os sensores precisam alinhar de novo. Cartão incompatível (ex.: COCKPIT ceo com PROPULSAO neo) é recusado.
+- O `.jar` é copiado para `cache/` antes de carregar, então o Windows não trava o arquivo no cartão.
+
+**Fonte dos cartuchos** (`-Dsim.cartridges=...`):
+
+| Valor | Usa |
+|---|---|
+| `auto` (padrão) | cartões SD; se nenhum estiver plugado, as pastas `sd-dev/` |
+| `sd` | só cartões SD |
+| `dev` | só `sd-dev/` |
+
+Outras opções: `-Dsim.sd.drives=G,H,I` limita a busca a essas letras; `-Dsim.sd.roots=pastaA;pastaB` usa pastas fingindo ser leitores (copie uma imagem de `cartridges/build/sd/` para dentro para "encaixar", apague para "arrancar").
+
 ## Módulos do projeto
 
 - `core`: contratos (barramento, `AvionicsModule`, `BaseModule`, cartuchos)
@@ -32,7 +60,7 @@ Regra: **PROPULSAO neo exige COCKPIT neo**.
 - `host`: o "supercomputador" (rack, cartuchos, loop de simulação, falhas, comandos do instrutor)
 - `net`: comunicação TCP entre o PC do instrutor e o do aluno
 - `cockpit`: o programa gráfico em LibGDX (título, rack, boot, cockpit, estação do instrutor)
-- `sd-dev/`: pastas que fingem ser cartões SD durante o desenvolvimento
+- `sd-dev/`: pastas que fingem ser cartões SD durante o desenvolvimento (e a fonte das imagens gravadas nos cartões)
 
 ## Rodar
 
@@ -92,6 +120,24 @@ O mapa mostra o avião do aluno, o rastro e a pista; o espelho mostra os dados r
 | F12 | screenshot (pasta `screenshots/`) |
 | ESC | volta para o rack (SOLO) ou desconecta (ALUNO) |
 
+### Controle de videogame (modo simplificado)
+
+Plugue um controle (Xbox, PlayStation ou genérico), antes ou durante o voo, e ele assume sozinho. Aparece **CONTROLE CONECTADO** e o voo fica só no acelerar e dar direção:
+
+| Controle | Ação |
+|---|---|
+| Analógico esquerdo | direção: para os lados inclina as asas (e vira a roda do nariz no chão); puxar sobe o nariz, empurrar desce |
+| RT | acelera |
+| LT | reduz; com a manete toda atrás, freia |
+| A | desliga o piloto automático |
+| Y | alterna PAINEL / JANELA |
+| Start | pausa (SOLO) |
+| Back | volta para o rack (SOLO) ou desconecta (ALUNO) |
+
+Nos menus (abertura, título, rack, conexão) o controle também navega: direcional ou analógico para mover, **A** confirma, **B** volta.
+
+Flaps e trem ficam **automáticos**: flaps 1 para decolar e recolhendo conforme ganha velocidade; na aproximação, flaps e trem baixam conforme o avião desacelera e desce. Desconectou o controle, o teclado volta no modo completo com a manete, os flaps e o trem onde estavam. Pausa, reposicionar e ESC continuam no teclado.
+
 Mouse no FCU: rodinha sobre SPD/HDG/ALT/V/S ajusta (SHIFT = x10), clique em AP1 e A/THR.
 
 ### Decolagem de exemplo
@@ -107,7 +153,7 @@ Mouse no FCU: rodinha sobre SPD/HDG/ALT/V/S ajusta (SHIFT = x10), clique em AP1 
 0. Fundação: rack, cartuchos, barramento e console ✅
 1. Modelo de voo simplificado ✅
 2. Cockpit 2D (PFD, ND, ECAM), teclado e mouse, sons ✅ e vista pela janela estilo Mode 7 ✅
-3. Cartuchos reais: leitores SD (ou `subst`/pendrive), `.jar` por cartucho
+3. Cartuchos reais: leitores SD, `.jar` por cartão, encaixar/arrancar com o avião ligado ✅
 4. Rede instrutor ↔ aluno + estação do instrutor (falhas, pausa, reposicionamento, mensagens) ✅
 5. Estação do instrutor completa: clima, snapshots, falhas programadas, mais falhas
 6. Polimento: mais cenário (nuvens, noite, aeroportos), fonte pixel, debriefing

@@ -14,6 +14,8 @@ dependencies {
 test {
     useJUnitPlatform()
     workingDir = rootProject.projectDir
+    // SdCartridgeTest usa as imagens dos cartões (cartridge.json + caixas.jar)
+    dependsOn ':cartridges:sdImages'
 }
 
 application {

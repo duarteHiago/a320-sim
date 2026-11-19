@@ -4,12 +4,12 @@ import br.a320sim.cockpit.SimApp;
 import br.a320sim.cockpit.audio.Sfx;
 import br.a320sim.cockpit.gfx.Draw;
 import br.a320sim.cockpit.gfx.Draw.Align;
+import br.a320sim.cockpit.input.MenuInput;
 import br.a320sim.cockpit.gfx.TextInput;
 import br.a320sim.cockpit.session.RemoteSession;
 import br.a320sim.net.SimClient;
 import br.a320sim.net.SimServer;
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Color;
 
 import java.util.concurrent.CompletableFuture;
@@ -65,11 +65,13 @@ public class ConnectScreen extends RetroScreen {
             }
             return;
         }
-        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE)) {
+        if (MenuInput.back()) {
+            app.sound().play(Sfx.BACK);
             app.showTitle();
             return;
         }
-        if (Gdx.input.isKeyJustPressed(Keys.ENTER) && !address.text().isBlank()) {
+        if (MenuInput.confirm() && !address.text().isBlank()) {
+            app.sound().play(Sfx.SELECT);
             connect();
         }
     }

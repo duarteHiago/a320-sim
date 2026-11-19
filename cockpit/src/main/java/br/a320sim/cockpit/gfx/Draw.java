@@ -4,8 +4,6 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.g2d.BitmapFont;
-import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Matrix4;
@@ -25,14 +23,8 @@ public final class Draw implements Disposable {
 
     private final ShapeRenderer shapes = new ShapeRenderer();
     private final SpriteBatch batch = new SpriteBatch();
-    private final BitmapFont font = new BitmapFont();
-    private final GlyphLayout layout = new GlyphLayout();
+    private final PixelFont font = new PixelFont();
     private Mode mode = Mode.NONE;
-
-    public Draw() {
-        font.getRegion().getTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        font.setUseIntegerPositions(true);
-    }
 
     public void begin(Matrix4 projection) {
         shapes.setProjectionMatrix(projection);
@@ -104,16 +96,24 @@ public final class Draw implements Disposable {
 
     public void text(String text, float x, float y, Color color, Align align, int scale) {
         switchTo(Mode.TEXT);
-        font.getData().setScale(scale);
-        font.setColor(color);
-        layout.setText(font, plain(text));
+        String plain = plain(text);
+        float width = PixelFont.width(plain, scale);
         float dx = switch (align) {
             case LEFT -> 0;
-            case CENTER -> -layout.width / 2;
-            case RIGHT -> -layout.width;
+            case CENTER -> -width / 2;
+            case RIGHT -> -width;
         };
-        font.draw(batch, layout, Math.round(x + dx), Math.round(y + font.getCapHeight() / 2));
-        font.getData().setScale(1);
+        font.draw(batch, plain, x + dx, y, scale, color);
+    }
+
+    /** Texto com sombra projetada (títulos e logos). */
+    public void shadowText(String text, float x, float y, Color color, Color shadow, Align align, int scale) {
+        text(text, x + scale, y - scale, shadow, align, scale);
+        text(text, x, y, color, align, scale);
+    }
+
+    public static float textWidth(String text, int scale) {
+        return PixelFont.width(plain(text), scale);
     }
 
     /** Limita o desenho a um retângulo (ex.: a fita de velocidade). */
@@ -155,7 +155,7 @@ public final class Draw implements Disposable {
         mode = next;
     }
 
-    /** A fonte bitmap padrão não tem acentos: "Propulsão" vira "Propulsao". */
+    /** A fonte pixel não tem acentos: "Propulsão" vira "Propulsao". */
     private static String plain(String text) {
         return Normalizer.normalize(text, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
     }

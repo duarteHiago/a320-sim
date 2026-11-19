@@ -1,14 +1,12 @@
 package br.a320sim.host.cartridge;
 
-import br.a320sim.core.cartridge.CartridgeManifest;
-
 import java.util.List;
 
 /**
- * Fonte de cartuchos disponíveis.
- * Fase 0: pastas em sd-dev/ fingem ser cartões. Fase 3: leitores SD reais.
+ * Fonte de cartuchos disponíveis: pastas em sd-dev/ ({@link DevFolderReader})
+ * ou cartões SD de verdade nos leitores ({@link SdCardReader}).
  */
 public interface CartridgeReader {
 
-    List<CartridgeManifest> scan();
+    List<DetectedCartridge> scan();
 }

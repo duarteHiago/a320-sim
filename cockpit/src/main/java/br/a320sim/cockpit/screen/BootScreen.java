@@ -4,12 +4,11 @@ import br.a320sim.cockpit.SimApp;
 import br.a320sim.cockpit.audio.Sfx;
 import br.a320sim.cockpit.gfx.Draw;
 import br.a320sim.cockpit.gfx.Draw.Align;
+import br.a320sim.cockpit.input.MenuInput;
 import br.a320sim.core.cartridge.Cartridge;
 import br.a320sim.core.module.AvionicsModule;
 import br.a320sim.core.module.SelfTestResult;
 import br.a320sim.host.Host;
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input.Keys;
 import com.badlogic.gdx.graphics.Color;
 
 import java.util.ArrayList;
@@ -98,7 +97,7 @@ public class BootScreen extends RetroScreen {
 
     @Override
     protected void update(float delta) {
-        if (Gdx.input.isKeyJustPressed(Keys.ANY_KEY)) {
+        if (MenuInput.any()) {
             fast = true;
         }
         timer -= fast ? delta * 8 : delta;

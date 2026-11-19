@@ -2,6 +2,8 @@ package br.a320sim.host;
 
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
+import br.a320sim.core.cartridge.Cartridge;
+import br.a320sim.core.cartridge.CartridgeGroup;
 import br.a320sim.core.module.AvionicsModule;
 import br.a320sim.core.module.SelfTestResult;
 import br.a320sim.flightmodel.FlightModel;
@@ -16,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /** O "supercomputador": dono do barramento, do rack, do modelo de voo, das falhas e do relógio. */
@@ -75,6 +78,7 @@ public class Host {
                 selfTests.put(module, module.selfTest());
             }
             powered = true;
+            publishMissingSlots();
         }
         return new PowerOnResult(report, selfTests);
     }
@@ -82,6 +86,53 @@ public class Host {
     public void powerOff() {
         rack.modules().forEach(AvionicsModule::powerDown);
         powered = false;
+        bus.clear(Labels.RACK_MISSING);
+    }
+
+    public enum HotInsertResult { LOADED, SLOT_OCCUPIED, INCOMPATIBLE }
+
+    /**
+     * Tira o cartucho de um slot. Com o avião ligado, as caixas dele desligam na hora
+     * (somem do barramento) e o resto do avião segue sem elas.
+     */
+    public Optional<Cartridge> ejectCartridge(CartridgeGroup group) {
+        Optional<Cartridge> removed = rack.remove(group);
+        if (removed.isPresent() && powered) {
+            removed.get().modules().forEach(AvionicsModule::powerDown);
+            log.add(new LoggedCommand(simTime, "CARTUCHO " + group + " REMOVIDO"));
+            publishMissingSlots();
+        }
+        return removed;
+    }
+
+    /** Encaixa um cartucho num slot vazio; com o avião ligado, as caixas fazem power-up e self-test. */
+    public HotInsertResult hotInsert(Cartridge cartridge) {
+        if (rack.insert(cartridge).isPresent()) {
+            return HotInsertResult.SLOT_OCCUPIED;
+        }
+        if (!rack.incompatibilities().isEmpty()) {
+            rack.remove(cartridge.group());
+            return HotInsertResult.INCOMPATIBLE;
+        }
+        if (powered) {
+            for (AvionicsModule module : cartridge.modules()) {
+                module.powerUp(bus);
+                module.selfTest();
+            }
+            log.add(new LoggedCommand(simTime, "CARTUCHO " + cartridge.manifest().partNumber() + " CARREGADO"));
+            publishMissingSlots();
+        }
+        return HotInsertResult.LOADED;
+    }
+
+    private void publishMissingSlots() {
+        List<String> missing = new ArrayList<>();
+        for (CartridgeGroup group : CartridgeGroup.values()) {
+            if (rack.slot(group).isEmpty()) {
+                missing.add(group.name());
+            }
+        }
+        bus.publish(Labels.RACK_MISSING, missing);
     }
 
     public void execute(InstructorCommand command) {

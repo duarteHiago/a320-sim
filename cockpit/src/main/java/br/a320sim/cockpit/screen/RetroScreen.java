@@ -2,6 +2,7 @@ package br.a320sim.cockpit.screen;
 
 import br.a320sim.cockpit.SimApp;
 import br.a320sim.cockpit.gfx.Draw;
+import br.a320sim.cockpit.input.MenuInput;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.ScreenAdapter;
@@ -80,6 +81,7 @@ public abstract class RetroScreen extends ScreenAdapter {
             screenshotAt = 0;
             requestScreenshot();
         }
+        MenuInput.update(Math.min(delta, 0.1f));
         update(Math.min(delta, 0.1f));
         if (app.getScreen() != this) {
             return;
