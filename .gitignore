@@ -9,3 +9,7 @@ screenshots/
 chaves/
 *.key
 bin/
+
+# Banco H2 de desenvolvimento
+dados/sica*.db
+dados/*.trace.db

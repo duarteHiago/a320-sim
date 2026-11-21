@@ -1,0 +1,3 @@
+# Scripts do banco, em ordem. Cada um roda uma vez só (tabela versao_esquema).
+V1__schema.sql
+V2__seed.sql
