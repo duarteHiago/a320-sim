@@ -154,7 +154,8 @@ O mapa mostra o avião do aluno, o rastro e a pista; o espelho mostra os dados r
 | I | alinhamento instantâneo dos sensores (só no SOLO) |
 | C | alterna PAINEL (instrumentos) e JANELA (para-brisa) |
 | F12 | screenshot (pasta `screenshots/`) |
-| ESC | volta para o rack (SOLO) ou desconecta (ALUNO) |
+| F1 | abre e fecha o MCDU (plano de voo) |
+| ESC | volta para o rack (SOLO) ou desconecta (ALUNO); com o MCDU aberto, só fecha o MCDU |
 
 ### Controle de videogame (modo simplificado)
 
@@ -214,10 +215,43 @@ Para dados oficiais, a referência é o AIP Brasil no [AISWEB do DECEA](https://
 ## Vento, obstáculos e aves
 
 - **Vento e turbulência** (botão VENTO na IOS): o avião deriva com o vento, o velocímetro mede o ar e a velocidade sobre o chão (GS) soma ou desconta o vento. A turbulência sacode em subida/descida, inclinação (que volta sozinha: o fly-by-wire segura a atitude) e velocidade. As rajadas são sorteadas com semente fixa, então o mesmo voo se repete igual nos testes.
-- **Prédios e árvores**: as cidades de Campinas, São Paulo (Congonhas fica dentro dela) e Guarulhos, e as árvores das plantações, saem de um gerador compartilhado pela vista e pelo modelo de voo. Bater num prédio ou árvore é CRASH, com o evento **COLISAO COM PREDIO** ou **COLISAO COM ARVORE** no histórico da sessão. Antes de cada cabeceira a altura dos prédios é limitada por uma rampa de 2° (como as zonas de proteção de aeródromo): uma aproximação na rampa de 3° nunca bate.
+- **Prédios e árvores**: as cidades de Campinas, São Paulo (Congonhas fica dentro dela) e Guarulhos, e as árvores das plantações, saem de um gerador compartilhado pela vista e pelo modelo de voo. Bater num prédio ou árvore é CRASH, com o evento **COLISAO COM PREDIO** ou **COLISAO COM ARVORE** no histórico da sessão. A altura dos prédios segue as zonas de proteção de aeródromo: ao lado da pista há uma faixa livre (240 a 440 m do eixo, mais larga do lado do terminal), depois casas baixas que sobem 1 m a cada 7 m de afastamento (superfície de transição); antes de cada cabeceira, uma rampa de 2°. Uma aproximação na rampa de 3° nunca bate.
 - **Aves**: o bando voa em V, migrando a 30 kt. Atravessar o bando para o motor do lado atingido (ENG FAIL) e, pelo meio, os dois; o evento **COLISAO COM AVES (MOTOR 1)** vai para o histórico. O bando passa pelo barramento, então o aluno também vê pela janela.
 
 Atalhos para testar sem teclado: `-Dsim.vento=1` (ou `2`) aplica uma predefinição de vento depois do boot; `-Dsim.aves=1` solta um bando à frente e `-Dsim.aves=auto` liga as aves automáticas.
+
+## Plano de voo (MCDU)
+
+![MCDU com o plano SBKP para SBGR inserido](docs/img/mcdu.png)
+
+Na cabine, **F1** abre o MCDU (página INIT/PERF). O aluno preenche, antes de decolar:
+
+| Campo | Regra |
+|---|---|
+| Origem e destino | SBKP, SBGR ou SBSP (a origem começa no aeroporto mais perto, o destino no da sessão) |
+| Pista de destino | uma pista que exista no destino |
+| FL de cruzeiro | de 050 a 410, de 10 em 10 |
+| Peso sem combustível | de 42.000 a 62.500 kg |
+| Combustível | de 1.000 a 18.700 kg; o peso de decolagem (os dois somados) não pode passar de 78.000 kg |
+| V1, VR, V2 | de 100 a 180 kt, com V1 ≤ VR ≤ V2; o MCDU mostra as velocidades sugeridas para o peso |
+
+Setas trocam de campo e de opção, **ENTER** insere, **F1** ou **ESC** fecha. Enquanto o MCDU está aberto, o teclado não pilota (o avião segue com os últimos comandos). Campos obrigatórios vazios aparecem como caixinhas âmbar, como no avião de verdade; erros em vermelho.
+
+Plano inserido:
+
+- o peso de decolagem vira o peso do avião no modelo de voo (sem plano, 66 t); mais pesado, ele precisa de mais pista. O combustível é só um número do plano, não é consumido;
+- as marcas **1**, **R** e **2** aparecem na fita de velocidade do PFD;
+- a pista de destino do plano vira o destino da sessão (distância no HUD);
+- a IOS mostra o resumo do plano no topo, ou **SEM PLANO** piscando;
+- o plano vai para o log e fica gravado na sessão (histórico de treino).
+
+Decolar sem plano não é bloqueado: fica registrado como **SEM PLANO DE VOO** no log da sessão. No modo ALUNO, o plano vai do PC do aluno para o instrutor junto com os comandos do manche.
+
+Atalhos para testar: `-Dsim.mcdu` abre o MCDU ao entrar na cabine; `-Dsim.plano=SBKP,SBGR,10L,100,60000,8000,140,143,148` insere esse plano (no modo INSTRUTOR, faz de conta que o aluno inseriu).
+
+## Tela e ampliação
+
+A imagem é desenhada em 640x360 e ampliada em múltiplos inteiros. As linhas de varredura de CRT aparecem nos menus e nas telas do painel ceo (que são CRT), não na vista pela janela; `-Dsim.scanlines=off` desliga o efeito. `-Dsim.janela=1920x1009` abre a janela num tamanho dado (para conferir a ampliação).
 
 ## Cadastros e histórico de treino
 
