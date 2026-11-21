@@ -19,6 +19,7 @@ import br.a320sim.cockpit.screen.TitleScreen;
 import br.a320sim.cockpit.session.LocalSession;
 import br.a320sim.cockpit.session.SessionKeeper;
 import br.a320sim.cockpit.session.SessionPlan;
+import br.a320sim.core.AppPaths;
 import br.a320sim.dados.BancoLocal;
 import br.a320sim.dados.Dados;
 import br.a320sim.dados.modelo.Sessao;
@@ -38,7 +39,6 @@ import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 
 import java.io.IOException;
-import java.nio.file.Path;
 
 /**
  * O mesmo programa roda nos dois PCs; o papel é escolhido na tela de título:
@@ -251,7 +251,7 @@ public class SimApp extends Game {
     }
 
     public String bancoCaminho() {
-        return Path.of(System.getProperty("sim.db", BancoLocal.PADRAO)).toAbsolutePath() + ".mv.db";
+        return AppPaths.current().database().toAbsolutePath() + ".mv.db";
     }
 
     private void closeServer() {

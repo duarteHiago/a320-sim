@@ -1,5 +1,6 @@
 package br.a320sim.host.cartridge;
 
+import br.a320sim.core.AppPaths;
 import br.a320sim.core.cartridge.Cartridge;
 import br.a320sim.core.cartridge.CartridgeManifest;
 import br.a320sim.core.cartridge.CartridgeRejectedException;
@@ -50,7 +51,8 @@ public class CartridgeLoader {
     }
 
     public CartridgeLoader(ModuleFactory classpath, CardPolicy policy) {
-        this(classpath, new JarCartridgeLoader(Path.of("cache", "cartridges")), CartridgeTrust.factoryKey(), policy);
+        this(classpath, new JarCartridgeLoader(AppPaths.current().cartridgeCache()), CartridgeTrust.factoryKey(),
+                policy);
     }
 
     /** Carga sem contar como leitura nova (ex.: testes, ou o cartão já foi lido nesta inserção). */

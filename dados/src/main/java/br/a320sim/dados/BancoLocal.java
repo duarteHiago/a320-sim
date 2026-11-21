@@ -1,5 +1,6 @@
 package br.a320sim.dados;
 
+import br.a320sim.core.AppPaths;
 import br.a320sim.host.cartridge.CardPolicy;
 
 import java.nio.file.Path;
@@ -12,11 +13,10 @@ import java.util.Optional;
  * a política de cartões aceita todos e as sessões não são gravadas.
  * <p>
  * O banco só é aberto quando alguém pede ({@link #abrir()}); o modo ALUNO nunca pede.
- * {@code -Dsim.db=caminho} troca o arquivo (padrão {@code dados/sica}).
+ * {@code -Dsim.db=caminho} troca o arquivo (padrão: {@link AppPaths#database()}).
  */
 public final class BancoLocal implements AutoCloseable {
 
-    public static final String PADRAO = "dados/sica";
 
     /** Abre o banco de verdade; nos testes pode ser qualquer coisa que lance exceção. */
     public interface Abridor {
@@ -37,8 +37,9 @@ public final class BancoLocal implements AutoCloseable {
         return new BancoLocal(() -> new Dados(Banco.arquivo(caminho)));
     }
 
+    /** O banco deste PC: dados/sica em desenvolvimento, %APPDATA%\SICA instalado, ou -Dsim.db. */
     public static BancoLocal doSistema() {
-        return emArquivo(Path.of(System.getProperty("sim.db", PADRAO)));
+        return emArquivo(AppPaths.current().database());
     }
 
     /**

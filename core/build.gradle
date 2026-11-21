@@ -1,2 +1,11 @@
 // Contratos compartilhados: barramento, módulos (caixas) e cartuchos.
 // Não depende de nada — tanto o host quanto os cartuchos dependem dele.
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+}

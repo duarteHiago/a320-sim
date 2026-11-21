@@ -1,6 +1,7 @@
 package br.a320sim.cockpit.screen;
 
 import br.a320sim.cockpit.SimApp;
+import br.a320sim.core.AppPaths;
 import br.a320sim.cockpit.gfx.Draw;
 import br.a320sim.cockpit.input.MenuInput;
 import com.badlogic.gdx.Gdx;
@@ -162,8 +163,10 @@ public abstract class RetroScreen extends ScreenAdapter {
         }
         Pixmap pixmap = new Pixmap(w, h, Pixmap.Format.RGBA8888);
         BufferUtils.copy(pixels, 0, pixmap.getPixels(), pixels.length);
-        String file = "screenshots/sica-" + System.currentTimeMillis() + ".png";
-        PixmapIO.writePNG(Gdx.files.local(file), pixmap);
+        // Em desenvolvimento, screenshots/; instalado, Imagens\SICA
+        String file = AppPaths.current().screenshots().resolve("sica-" + System.currentTimeMillis() + ".png")
+                .toAbsolutePath().toString();
+        PixmapIO.writePNG(Gdx.files.absolute(file), pixmap);
         pixmap.dispose();
         Gdx.app.log("SICA", "Screenshot salvo em " + file + " (" + Gdx.graphics.getFramesPerSecond() + " fps)");
     }
