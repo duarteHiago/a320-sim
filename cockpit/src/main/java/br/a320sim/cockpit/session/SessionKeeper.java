@@ -34,7 +34,7 @@ public final class SessionKeeper {
         Posicao posicao = plan.posicao();
         if (posicao != null) {
             host.execute(new ApplyPositionCommand(posicao.nome(), posicao.altitudeFt(), posicao.velocidadeKt(),
-                    posicao.proaGraus(), posicao.distanciaNm()));
+                    posicao.proaGraus(), posicao.distanciaNm(), posicao.destino(), posicao.pista()));
         }
         if (plan.aluno() == null) {
             return;

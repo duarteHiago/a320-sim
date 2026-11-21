@@ -110,4 +110,12 @@ class SessionKeeperTest {
         assertFalse(dados.sessoes().buscar(primeira).orElseThrow().aberta());
         assertTrue(host.flightModel().isOnGround(), "sem posicao fica na cabeceira");
     }
+
+    @Test
+    void posicaoDeGuarulhosLevaOAviaoParaLa() {
+        keeper.start(new SessionPlan(pessoa(Perfil.ALUNO), null, posicao("FINAL GRU 10L")), Sessao.SOLO);
+        assertEquals(4059, host.bus().getDouble(Labels.TRUE_ALT, 0), 1);
+        assertEquals(1600, host.bus().getDouble(Labels.SIM_RADIO_ALT, 0), 1);
+        assertEquals("SBGR 10L", host.bus().getString(Labels.SIM_DEST_RUNWAY, ""));
+    }
 }

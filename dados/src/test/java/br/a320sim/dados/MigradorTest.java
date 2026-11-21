@@ -22,10 +22,10 @@ class MigradorTest {
     @Test
     void bancoNovoRecebeTodasAsMigracoesESeed() throws SQLException {
         try (Banco banco = Banco.memoria("migrador-novo")) {
-            assertEquals(2, Migrador.versaoAtual(banco.conexao()));
+            assertEquals(3, Migrador.versaoAtual(banco.conexao()));
             assertEquals(4, contar(banco.conexao(), "pessoa"));
             assertEquals(6, contar(banco.conexao(), "cartao"));
-            assertEquals(3, contar(banco.conexao(), "posicao"));
+            assertEquals(7, contar(banco.conexao(), "posicao"), "3 de SBKP + 4 de GRU e CGH (V3)");
         }
     }
 
@@ -45,7 +45,7 @@ class MigradorTest {
         }
         try (Banco banco = Banco.arquivo(caminho)) {
             assertEquals(0, contar(banco.conexao(), "cartao"), "reabrir não roda o seed de novo");
-            assertEquals(2, Migrador.versaoAtual(banco.conexao()));
+            assertEquals(3, Migrador.versaoAtual(banco.conexao()));
         }
         assertTrue(caminho.resolveSibling("sica.mv.db").toFile().isFile());
     }

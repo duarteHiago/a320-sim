@@ -7,6 +7,7 @@ import br.a320sim.flightmodel.FlightModel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -87,8 +88,9 @@ class PosicaoServicoTest {
 
     @Test
     void destinoPrecisaSerConhecido() {
-        Posicao gru = new Posicao(null, "GRU", 8000, 250, 148, 10, "SBGR");
-        assertTrue(erros(gru).containsKey(PosicaoServico.CAMPO_DESTINO));
+        // SBGR passou a existir na Fase 3; o Santos Dumont continua fora do simulador
+        Posicao sdu = new Posicao(null, "SDU", 8000, 250, 148, 10, "SBRJ");
+        assertTrue(erros(sdu).containsKey(PosicaoServico.CAMPO_DESTINO));
     }
 
     @Test
@@ -105,5 +107,47 @@ class PosicaoServicoTest {
         RegraException e = assertThrows(RegraException.class, () -> servico.excluir(pista.id()));
         assertEquals("nao pode excluir: usada em 3 sessoes", e.getMessage());
         assertFalse(servico.buscar(pista.id()).isEmpty());
+    }
+
+    // --- Fase 3: Guarulhos e Congonhas ---
+
+    private static Posicao em(String nome, int alt, int vel, double dist, String destino, String pista) {
+        return new Posicao(null, nome, alt, vel, 94, dist, destino, pista);
+    }
+
+    @Test
+    void seedTemAsPosicoesDeGuarulhosECongonhas() {
+        Posicao final10L = servico.listar().stream().filter(p -> p.nome().equals("FINAL GRU 10L")).findFirst().orElseThrow();
+        assertEquals("SBGR", final10L.destino());
+        assertEquals("10L", final10L.pista());
+        assertEquals(4059, final10L.altitudeFt(), "1600 ft acima de GRU");
+        Posicao pista15 = servico.listar().get(0);
+        assertEquals("15", pista15.pista(), "posicoes antigas ficaram na pista 15");
+        assertEquals(List.of("FINAL GRU 10L", "FINAL CGH 17R", "PISTA GRU 10L", "PISTA CGH 17R"),
+                servico.listar().stream().map(Posicao::nome).toList().subList(3, 7));
+    }
+
+    @Test
+    void pistaPrecisaExistirNoDestino() {
+        assertEquals("SBGR tem as pistas 10L 28R 10R 28L",
+                erros(em("GRU 15", 8000, 250, 10, "SBGR", "15")).get(PosicaoServico.CAMPO_PISTA));
+        assertTrue(erros(em("GRU 09L", 8000, 250, 10, "SBGR", "09L")).containsKey(PosicaoServico.CAMPO_PISTA),
+                "numeracao antiga");
+        assertEquals("28L", servico.salvar(em("GRU 28L", 8000, 250, 10, "sbgr", "28l")).pista());
+        assertEquals("35R", servico.salvar(em("CGH 35R", 8000, 250, 10, "SBSP", "35R")).pista());
+    }
+
+    @Test
+    void noChaoAAltitudeEADoAeroportoDeDestino() {
+        assertEquals(2459, servico.salvar(em("CHAO GRU", 0, 0, 0, "SBGR", "28R")).altitudeFt());
+        assertEquals(2631, servico.salvar(em("CHAO CGH", 0, 0, 0, "SBSP", "17L")).altitudeFt());
+    }
+
+    @Test
+    void emVoo500PesAcimaDoAeroportoDeDestino() {
+        assertEquals("em voo no minimo 3131 ft (500 acima do campo)",
+                erros(em("BAIXO CGH", 3000, 150, 5, "SBSP", "17R")).get(PosicaoServico.CAMPO_ALTITUDE));
+        servico.salvar(em("BAIXO CGH", 3131, 150, 5, "SBSP", "17R"));
+        servico.salvar(em("BAIXO KP", 2670, 150, 5, "SBKP", "33"));
     }
 }

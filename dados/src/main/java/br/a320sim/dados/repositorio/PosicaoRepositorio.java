@@ -15,7 +15,7 @@ import java.util.Optional;
 /** Tabela {@code posicao}. */
 public class PosicaoRepositorio {
 
-    private static final String COLUNAS = "id, nome, altitude_ft, velocidade_kt, proa_graus, distancia_nm, destino";
+    private static final String COLUNAS = "id, nome, altitude_ft, velocidade_kt, proa_graus, distancia_nm, destino, pista";
 
     private final Connection conexao;
 
@@ -57,8 +57,8 @@ public class PosicaoRepositorio {
     }
 
     public Posicao inserir(Posicao p) {
-        String sql = "INSERT INTO posicao (nome, altitude_ft, velocidade_kt, proa_graus, distancia_nm, destino) "
-                + "VALUES (?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO posicao (nome, altitude_ft, velocidade_kt, proa_graus, distancia_nm, destino, pista) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conexao.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             preencher(ps, p);
             ps.executeUpdate();
@@ -70,10 +70,10 @@ public class PosicaoRepositorio {
 
     public void atualizar(Posicao p) {
         String sql = "UPDATE posicao SET nome = ?, altitude_ft = ?, velocidade_kt = ?, proa_graus = ?, "
-                + "distancia_nm = ?, destino = ? WHERE id = ?";
+                + "distancia_nm = ?, destino = ?, pista = ? WHERE id = ?";
         try (PreparedStatement ps = conexao.prepareStatement(sql)) {
             preencher(ps, p);
-            ps.setLong(7, p.id());
+            ps.setLong(8, p.id());
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new DadosException("Erro ao atualizar posicao", e);
@@ -105,6 +105,7 @@ public class PosicaoRepositorio {
         ps.setInt(4, p.proaGraus());
         ps.setDouble(5, p.distanciaNm());
         ps.setString(6, p.destino());
+        ps.setString(7, p.pista());
     }
 
     private static Optional<Posicao> primeiro(PreparedStatement ps) throws SQLException {
@@ -116,6 +117,6 @@ public class PosicaoRepositorio {
     private static Posicao ler(ResultSet rs) throws SQLException {
         return new Posicao(rs.getLong("id"), rs.getString("nome"), rs.getInt("altitude_ft"),
                 rs.getInt("velocidade_kt"), rs.getInt("proa_graus"), rs.getDouble("distancia_nm"),
-                rs.getString("destino").strip());
+                rs.getString("destino").strip(), rs.getString("pista"));
     }
 }

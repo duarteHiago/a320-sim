@@ -429,7 +429,7 @@ public class CrudScreen<T> extends RetroScreen {
             return;
         }
         if (form.atual().tipo() == Campo.Tipo.OPCAO) {
-            for (int i = 0; i < form.atual().opcoes().size() && !form.valor(key).equals(value); i++) {
+            for (int i = 0; i < form.atual().opcoes(form.valores()).size() && !form.valor(key).equals(value); i++) {
                 form.opcaoSeguinte();
             }
         } else {

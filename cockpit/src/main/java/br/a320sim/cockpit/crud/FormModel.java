@@ -37,11 +37,9 @@ public final class FormModel {
         this.campos = List.copyOf(campos);
         for (Campo campo : this.campos) {
             String valor = iniciais.getOrDefault(campo.chave(), "");
-            if (campo.tipo() == Campo.Tipo.OPCAO && !campo.opcoes().contains(valor)) {
-                valor = campo.opcoes().isEmpty() ? "" : campo.opcoes().get(0);
-            }
             valores.put(campo.chave(), valor == null ? "" : valor);
         }
+        ajustarOpcoes();
         atual = -1;
         proximo();
     }
@@ -108,13 +106,29 @@ public final class FormModel {
 
     private void girarOpcao(int direcao) {
         Campo campo = atual();
-        if (campo == null || campo.tipo() != Campo.Tipo.OPCAO || campo.opcoes().isEmpty()) {
+        if (campo == null || campo.tipo() != Campo.Tipo.OPCAO || campo.opcoes(valores).isEmpty()) {
             return;
         }
-        List<String> opcoes = campo.opcoes();
+        List<String> opcoes = campo.opcoes(valores);
         int i = Math.max(0, opcoes.indexOf(valores.get(campo.chave())));
         valores.put(campo.chave(), opcoes.get(Math.floorMod(i + direcao, opcoes.size())));
         erros.remove(campo.chave());
+        ajustarOpcoes();
+    }
+
+    /**
+     * Campo de opção com um valor que não está entre as opções (ex.: trocou o destino e a pista antiga
+     * não existe no aeroporto novo) passa para a primeira opção.
+     */
+    private void ajustarOpcoes() {
+        for (Campo campo : campos) {
+            if (campo.tipo() == Campo.Tipo.OPCAO) {
+                List<String> opcoes = campo.opcoes(valores);
+                if (!opcoes.contains(valores.get(campo.chave()))) {
+                    valores.put(campo.chave(), opcoes.isEmpty() ? "" : opcoes.get(0));
+                }
+            }
+        }
     }
 
     /** Uma tecla digitada: letras e números ASCII entram, '\b' apaga. Só vale em campo de texto. */
@@ -139,8 +153,8 @@ public final class FormModel {
     /** O que aparece no campo: o valor digitado, ou o valor fixo se ele estiver bloqueado. */
     public String valor(String chave) {
         for (Campo campo : campos) {
-            if (campo.chave().equals(chave) && campo.bloqueado(valores) && campo.valorBloqueado() != null) {
-                return campo.valorBloqueado();
+            if (campo.chave().equals(chave) && campo.bloqueado(valores) && campo.valorBloqueado(valores) != null) {
+                return campo.valorBloqueado(valores);
             }
         }
         return valores.getOrDefault(chave, "");

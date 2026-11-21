@@ -159,4 +159,34 @@ class FormModelTest {
         Map<String, String> erros = assertThrows(ValidacaoException.class, c::lancarSeHouver).erros();
         assertEquals(Map.of("b", "numero inteiro (ex.: 250)", "c", "obrigatorio"), erros);
     }
+
+    // --- pista depende do destino (Fase 3) ---
+
+    @Test
+    void trocarODestinoTrocaAsPistasDisponiveis() {
+        FormModel f = posicao("250", "10");
+        assertEquals("SBKP", f.valor("destino"));
+        assertEquals("15", f.valor("pista"));
+        f.irPara("destino");
+        f.opcaoSeguinte();
+        assertEquals("SBGR", f.valor("destino"));
+        assertEquals("10L", f.valor("pista"), "a 15 nao existe em GRU: vai para a primeira");
+        f.irPara("pista");
+        f.opcaoSeguinte();
+        f.opcaoSeguinte();
+        assertEquals("10R", f.valor("pista"));
+        f.opcaoSeguinte();
+        f.opcaoSeguinte();
+        assertEquals("10L", f.valor("pista"), "da a volta nas 4 de GRU");
+    }
+
+    @Test
+    void altitudeBloqueadaMostraAElevacaoDoDestino() {
+        FormModel f = posicao("0", "0");
+        f.irPara("destino");
+        f.opcaoSeguinte();
+        f.opcaoSeguinte();
+        assertEquals("SBSP", f.valor("destino"));
+        assertEquals("2631", f.valor("altitude"));
+    }
 }

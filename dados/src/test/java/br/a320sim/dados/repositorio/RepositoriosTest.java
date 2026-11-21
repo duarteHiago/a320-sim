@@ -110,8 +110,9 @@ class RepositoriosTest {
         assertEquals(nova, posicoes.buscarPorNome("teste").orElseThrow());
         posicoes.atualizar(new Posicao(nova.id(), "TESTE 2", 6000, 210, 91, 13, "SBKP"));
         assertEquals(6000, posicoes.buscar(nova.id()).orElseThrow().altitudeFt());
-        assertEquals(List.of("PISTA 15", "EM VOO 8000", "NA FINAL 5NM", "TESTE 2"),
-                posicoes.listar().stream().map(Posicao::nome).toList());
+        List<String> nomes = posicoes.listar().stream().map(Posicao::nome).toList();
+        assertEquals(List.of("PISTA 15", "EM VOO 8000", "NA FINAL 5NM"), nomes.subList(0, 3), "na ordem do cadastro");
+        assertEquals("TESTE 2", nomes.get(nomes.size() - 1));
 
         assertEquals(0, posicoes.contarSessoes(nova.id()));
         long aluno = pessoas.buscarPorMatricula("A001").orElseThrow().id();

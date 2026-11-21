@@ -139,7 +139,7 @@ public class IosScreen extends RetroScreen {
         }
         Posicao p = positions.get(position);
         app.host().execute(new ApplyPositionCommand(p.nome(), p.altitudeFt(), p.velocidadeKt(), p.proaGraus(),
-                p.distanciaNm()));
+                p.distanciaNm(), p.destino(), p.pista()));
     }
 
     @Override

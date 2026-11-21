@@ -30,20 +30,21 @@ public final class PosicoesAdapter implements CrudAdapter<Posicao> {
 
     @Override
     public String linha(Posicao p) {
-        String onde = p.noChao() ? "NO CHAO" : p.altitudeFt() + " FT " + p.velocidadeKt() + " KT";
-        return String.format("%-16s %s", p.nome(), onde);
+        String onde = p.noChao() ? "NO CHAO" : p.altitudeFt() + " FT";
+        return String.format("%-16s %-8s %s", p.nome(), onde, p.destino().substring(2));
     }
 
     @Override
     public List<String> detalhes(Posicao p) {
         return List.of(
                 "NOME|" + p.nome(),
-                "SITUACAO|" + (p.noChao() ? "NO CHAO (CABECEIRA)" : "EM VOO, NO PROLONGAMENTO DA PISTA"),
+                "SITUACAO|" + (p.noChao() ? "NO CHAO (CABECEIRA " + p.pista() + ")"
+                        : "EM VOO, NO PROLONGAMENTO DA " + p.pista()),
                 "ALTITUDE|" + p.altitudeFt() + " ft",
                 "VELOCIDADE|" + p.velocidadeKt() + " kt",
                 "PROA|" + String.format("%03d", p.proaGraus()),
                 "DISTANCIA|" + formatar(p.distanciaNm()) + " NM",
-                "DESTINO|" + p.destino(),
+                "DESTINO|" + p.destino() + "  PISTA " + p.pista(),
                 "SESSOES|" + posicoes.contarSessoes(p.id()));
     }
 
@@ -66,16 +67,19 @@ public final class PosicoesAdapter implements CrudAdapter<Posicao> {
                 Campo.texto(PosicaoServico.CAMPO_VELOCIDADE, "VELOCIDADE KT", 3),
                 Campo.texto(PosicaoServico.CAMPO_DISTANCIA, "DISTANCIA NM", 5),
                 Campo.texto(PosicaoServico.CAMPO_ALTITUDE, "ALTITUDE FT", 5)
-                        .bloqueadoQuando(PosicoesAdapter::noChao, String.valueOf(PosicaoServico.ELEVACAO_CAMPO)),
+                        .bloqueadoQuando(PosicoesAdapter::noChao,
+                                v -> String.valueOf(PosicaoServico.elevacao(v.get(PosicaoServico.CAMPO_DESTINO)))),
                 Campo.texto(PosicaoServico.CAMPO_PROA, "PROA", 3),
-                Campo.opcao(PosicaoServico.CAMPO_DESTINO, "DESTINO", PosicaoServico.DESTINOS));
+                Campo.opcao(PosicaoServico.CAMPO_DESTINO, "DESTINO", PosicaoServico.DESTINOS),
+                Campo.opcao(PosicaoServico.CAMPO_PISTA, "PISTA",
+                        v -> PosicaoServico.pistas(v.get(PosicaoServico.CAMPO_DESTINO))));
     }
 
     @Override
     public Map<String, String> valoresNovos() {
         return Map.of(PosicaoServico.CAMPO_VELOCIDADE, "250", PosicaoServico.CAMPO_DISTANCIA, "10",
                 PosicaoServico.CAMPO_ALTITUDE, "8000", PosicaoServico.CAMPO_PROA, "148",
-                PosicaoServico.CAMPO_DESTINO, PosicaoServico.DESTINOS.get(0));
+                PosicaoServico.CAMPO_DESTINO, PosicaoServico.DESTINOS.get(0), PosicaoServico.CAMPO_PISTA, "15");
     }
 
     @Override
@@ -86,7 +90,8 @@ public final class PosicoesAdapter implements CrudAdapter<Posicao> {
                 PosicaoServico.CAMPO_DISTANCIA, formatar(p.distanciaNm()),
                 PosicaoServico.CAMPO_ALTITUDE, String.valueOf(p.altitudeFt()),
                 PosicaoServico.CAMPO_PROA, String.valueOf(p.proaGraus()),
-                PosicaoServico.CAMPO_DESTINO, p.destino());
+                PosicaoServico.CAMPO_DESTINO, p.destino(),
+                PosicaoServico.CAMPO_PISTA, p.pista());
     }
 
     @Override
@@ -98,7 +103,7 @@ public final class PosicoesAdapter implements CrudAdapter<Posicao> {
         int proa = c.inteiro(PosicaoServico.CAMPO_PROA);
         c.lancarSeHouver();
         return posicoes.salvar(new Posicao(item == null ? null : item.id(), c.texto(PosicaoServico.CAMPO_NOME), altitude,
-                velocidade, proa, distancia, c.texto(PosicaoServico.CAMPO_DESTINO)));
+                velocidade, proa, distancia, c.texto(PosicaoServico.CAMPO_DESTINO), c.texto(PosicaoServico.CAMPO_PISTA)));
     }
 
     @Override

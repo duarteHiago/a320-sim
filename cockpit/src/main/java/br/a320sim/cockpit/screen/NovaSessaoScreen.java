@@ -209,9 +209,9 @@ public class NovaSessaoScreen extends RetroScreen {
 
     private String detail(Row<?> row) {
         if (row.value() instanceof Posicao p) {
-            return p.noChao() ? "na cabeceira da pista 15"
+            return p.noChao() ? "na cabeceira da pista " + p.pista() + " de " + p.destino()
                     : p.altitudeFt() + " ft  " + p.velocidadeKt() + " kt  proa " + String.format("%03d", p.proaGraus())
-                    + "  a " + PosicoesAdapter.formatar(p.distanciaNm()) + " NM de " + p.destino();
+                    + "  a " + PosicoesAdapter.formatar(p.distanciaNm()) + " NM de " + p.destino() + " " + p.pista();
         }
         if (row.options.size() > 1) {
             return (row.index + 1) + " de " + row.options.size();
