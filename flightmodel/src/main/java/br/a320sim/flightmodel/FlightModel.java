@@ -30,7 +30,8 @@ public class FlightModel {
     private static final double FT = 0.3048;
     private static final double NM = 1852;
 
-    private static final double MASS = 66_000;
+    /** Peso sem plano de voo (kg); com plano, vale o SIM.GROSS_WEIGHT. */
+    public static final double DEFAULT_MASS = 66_000;
     private static final double WING_AREA = 122.6;
     private static final double MAX_THRUST_PER_ENGINE = 115_000;
 
@@ -75,6 +76,8 @@ public class FlightModel {
     private double aoa;
     private boolean onGround;
     private boolean crashed;
+    /** Massa (kg) usada neste passo. */
+    private double mass = DEFAULT_MASS;
     /** O que foi atingido ("PREDIO", "ARVORE"), ou vazio. */
     private String collision = "";
 
@@ -157,6 +160,7 @@ public class FlightModel {
         }
         readWind();
         updateGusts(dt);
+        mass = bus.getDouble(Labels.SIM_GROSS_WEIGHT, DEFAULT_MASS);
         double hdg = Math.toRadians(heading);
         // Vento de proa (positivo) ou de cauda (negativo)
         double headwind = -(windX * Math.sin(hdg) + windY * Math.cos(hdg));
@@ -176,7 +180,7 @@ public class FlightModel {
         double cd = CD0 + FLAP_CD[flaps] + (gearDown ? GEAR_CD : 0) + INDUCED_K * cl * cl;
         double lift = q * WING_AREA * cl;
         double drag = q * WING_AREA * cd;
-        double weight = MASS * G;
+        double weight = mass * G;
 
         if (onGround) {
             stepGround(dt, airspeed, pitchRate, thrust, drag, lift, weight);
@@ -232,7 +236,7 @@ public class FlightModel {
 
         double brakes = bus.getDouble(Labels.CTL_BRAKES, 0);
         double friction = Math.max(0, weight - lift) * (ROLLING_FRICTION + BRAKE_FRICTION * brakes);
-        v = Math.max(0, v + (thrust - drag - friction) / MASS * dt);
+        v = Math.max(0, v + (thrust - drag - friction) / mass * dt);
         if (v > 0.5) {
             heading = wrap360(heading + bus.getDouble(Labels.CTL_YAW, 0) * STEERING_RATE * dt);
         }
@@ -246,8 +250,8 @@ public class FlightModel {
         pitch = clamp(pitch + pitchRate * dt, -90, 90);
         bank = wrap180(bank + rollRate * dt + rollDisturbance);
 
-        v = Math.max(15, v + ((thrust - drag) / MASS - G * Math.sin(gamma)) * dt);
-        double gammaRate = (lift * Math.cos(Math.toRadians(bank)) - weight * Math.cos(gamma)) / (MASS * v);
+        v = Math.max(15, v + ((thrust - drag) / mass - G * Math.sin(gamma)) * dt);
+        double gammaRate = (lift * Math.cos(Math.toRadians(bank)) - weight * Math.cos(gamma)) / (mass * v);
         gamma = clamp(gamma + gammaRate * dt, -1.4, 1.4);
         double turnBank = Math.toRadians(clamp(bank, -80, 80));
         heading = wrap360(heading + Math.toDegrees(G * Math.tan(turnBank) / v) * dt);
@@ -317,7 +321,7 @@ public class FlightModel {
     /** Ângulo de ataque que sustenta o peso na velocidade atual (para reposicionar em voo). */
     private double trimAoa() {
         double q = 0.5 * density() * v * v;
-        return (MASS * G / (q * WING_AREA) - CL0) / CL_PER_DEG;
+        return (bus.getDouble(Labels.SIM_GROSS_WEIGHT, DEFAULT_MASS) * G / (q * WING_AREA) - CL0) / CL_PER_DEG;
     }
 
     private static double thrustFraction(double n1) {
