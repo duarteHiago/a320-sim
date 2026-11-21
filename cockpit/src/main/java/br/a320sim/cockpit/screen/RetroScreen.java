@@ -163,12 +163,12 @@ public abstract class RetroScreen extends ScreenAdapter {
         }
         Pixmap pixmap = new Pixmap(w, h, Pixmap.Format.RGBA8888);
         BufferUtils.copy(pixels, 0, pixmap.getPixels(), pixels.length);
-        // Em desenvolvimento, screenshots/; instalado, Imagens\SICA
-        String file = AppPaths.current().screenshots().resolve("sica-" + System.currentTimeMillis() + ".png")
+        // Em desenvolvimento, screenshots/; instalado, Imagens\AVION
+        String file = AppPaths.current().screenshots().resolve("avion-" + System.currentTimeMillis() + ".png")
                 .toAbsolutePath().toString();
         PixmapIO.writePNG(Gdx.files.absolute(file), pixmap);
         pixmap.dispose();
-        Gdx.app.log("SICA", "Screenshot salvo em " + file + " (" + Gdx.graphics.getFramesPerSecond() + " fps)");
+        Gdx.app.log("AVION", "Screenshot salvo em " + file + " (" + Gdx.graphics.getFramesPerSecond() + " fps)");
     }
 
     @Override

@@ -1,6 +1,8 @@
-# SICA
+# AVIÓN
 
-**Simulador Integrado de Configuração Aeronáutica**
+**Ambiente Virtual de Integração e Operação de Navegação**
+
+(Nas telas do programa, que só usam ASCII, o nome aparece como AVION.)
 
 Simulador de jato bimotor com estética de console retrô. As "caixas pretas" do avião são carregadas por **cartuchos** (cartões SD), e o instrutor monta o avião escolhendo quais cartuchos encaixar.
 
@@ -261,7 +263,7 @@ A imagem é desenhada em 640x360 e ampliada em múltiplos inteiros. As linhas de
 |---|---|
 | ![Tela NOVA SESSAO com aluno, instrutor e posição](docs/img/nova-sessao.png) | ![Sessão gravada com nota, observação e eventos](docs/img/sessoes.png) |
 
-O simulador guarda cadastros e o histórico das aulas num banco **H2 em arquivo** (não precisa instalar nada). Em desenvolvimento ele fica em `dados/sica.mv.db` (fora do Git); `-Dsim.db=pasta/arquivo` troca o lugar. O esquema é criado e atualizado sozinho pelos scripts `dados/src/main/resources/db/V1__schema.sql`, `V2__seed.sql`... (cada um roda uma vez; a tabela `versao_esquema` guarda quais já rodaram). O seed traz 2 alunos, 2 instrutores, os 6 cartões (SD-01 a SD-06) e 3 posições.
+O simulador guarda cadastros e o histórico das aulas num banco **H2 em arquivo** (não precisa instalar nada). Em desenvolvimento ele fica em `dados/avion.mv.db` (fora do Git); `-Dsim.db=pasta/arquivo` troca o lugar. O esquema é criado e atualizado sozinho pelos scripts `dados/src/main/resources/db/V1__schema.sql`, `V2__seed.sql`... (cada um roda uma vez; a tabela `versao_esquema` guarda quais já rodaram). O seed traz 2 alunos, 2 instrutores, os 6 cartões (SD-01 a SD-06) e 3 posições.
 
 Na tela de título, **4 CADASTROS** abre:
 

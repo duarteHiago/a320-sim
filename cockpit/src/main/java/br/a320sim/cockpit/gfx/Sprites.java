@@ -42,10 +42,10 @@ public final class Sprites {
     }
 
     /** Nome grande do logo e o subtítulo espaçado embaixo dele. */
-    private static final String LOGO_NAME = "SICA";
+    private static final String LOGO_NAME = "AVION";
     private static final String LOGO_SUBTITLE = "S I M U L A D O R";
 
-    /** Logo "SICA / SIMULADOR": letras em degradê amarelo-laranja com contorno escuro, como nos fliperamas. */
+    /** Logo "AVION / SIMULADOR": letras em degradê amarelo-laranja com contorno escuro, como nos fliperamas. */
     public static void logo(Draw d, float cx, float cy, int scale) {
         float width = Draw.textWidth(LOGO_NAME, scale);
         float x = cx - width / 2;

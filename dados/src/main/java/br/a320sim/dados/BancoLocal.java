@@ -37,7 +37,7 @@ public final class BancoLocal implements AutoCloseable {
         return new BancoLocal(() -> new Dados(Banco.arquivo(caminho)));
     }
 
-    /** O banco deste PC: dados/sica em desenvolvimento, %APPDATA%\SICA instalado, ou -Dsim.db. */
+    /** O banco deste PC: dados/avion em desenvolvimento, %APPDATA%\AVION instalado, ou -Dsim.db. */
     public static BancoLocal doSistema() {
         return emArquivo(AppPaths.current().database());
     }

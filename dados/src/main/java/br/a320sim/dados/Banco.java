@@ -22,7 +22,7 @@ public final class Banco implements AutoCloseable {
         this.memoria = memoria;
     }
 
-    /** @param caminho sem extensão: "dados/sica" vira dados/sica.mv.db */
+    /** @param caminho sem extensão: "dados/avion" vira dados/avion.mv.db */
     public static Banco arquivo(Path caminho) throws SQLException {
         return abrir("jdbc:h2:file:" + caminho.toAbsolutePath(), false);
     }

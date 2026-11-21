@@ -42,11 +42,11 @@ test {
 
 // ---------------------------------------------------------------------------------------------
 // Instalador para Windows (jpackage, com o Java embutido; o .exe precisa do WiX Toolset 3)
-//   gradlew :cockpit:pacote      -> build/jpackage/SICA/SICA.exe (pasta pronta, sem instalar; não precisa de WiX)
-//   gradlew :cockpit:instalador  -> build/jpackage/SICA-<versão>.exe (instalador por usuário)
+//   gradlew :cockpit:pacote      -> build/jpackage/AVION/AVION.exe (pasta pronta, sem instalar; não precisa de WiX)
+//   gradlew :cockpit:instalador  -> build/jpackage/AVION-<versão>.exe (instalador por usuário)
 //   gradlew :cockpit:instalador -Ptipo=msi -> o mesmo como .msi (instala sem cliques: msiexec /i ... /qn)
 // ---------------------------------------------------------------------------------------------
-def appName = 'SICA'
+def appName = 'AVION'
 /** Fixo para sempre: é o que faz a versão nova substituir a antiga em vez de instalar duas. */
 def winUpgradeUuid = '9a4d404a-db55-43a5-b21f-cda3c39e5109'
 /**
@@ -79,22 +79,22 @@ def jpackageArgs = { String type ->
      '--type', type,
      '--name', appName,
      '--app-version', rootProject.appVersion,
-     '--vendor', 'SICA',
-     '--description', 'Simulador Integrado de Configuracao Aeronautica',
+     '--vendor', 'AVION',
+     '--description', 'Ambiente Virtual de Integracao e Operacao de Navegacao',
      '--icon', file('packaging/icone.ico').absolutePath,
      '--input', jpackageInput.get().asFile.absolutePath,
      '--main-jar', jar.archiveFileName.get(),
      '--main-class', application.mainClass.get(),
      '--add-modules', runtimeModules.join(','),
      '--jlink-options', '--strip-debug --no-header-files --no-man-pages',
-     // As pastas sd-dev (cartuchos sem cartão SD) vão junto, ao lado do SICA.exe
+     // As pastas sd-dev (cartuchos sem cartão SD) vão junto, ao lado do AVION.exe
      '--app-content', rootProject.file('sd-dev').absolutePath,
      '--dest', jpackageDir.get().asFile.absolutePath]
 }
 
 tasks.register('pacote', Exec) {
     group = 'instalador'
-    description = 'Gera build/jpackage/SICA (o programa com o Java embutido, sem instalar)'
+    description = 'Gera build/jpackage/AVION (o programa com o Java embutido, sem instalar)'
     dependsOn 'pacoteEntrada'
     doFirst {
         delete jpackageDir.get().dir(appName)
@@ -115,7 +115,7 @@ def findWix = {
 
 tasks.register('instalador', Exec) {
     group = 'instalador'
-    description = 'Gera build/jpackage/SICA-<versao>.exe (instalador para Windows)'
+    description = 'Gera build/jpackage/AVION-<versao>.exe (instalador para Windows)'
     dependsOn 'pacoteEntrada'
     doFirst {
         def wix = findWix()

@@ -24,7 +24,7 @@ class BancoLocalTest {
     void bancoQueNaoAbreDeixaOSimuladorSeguirSemGravar() throws IOException {
         // Um arquivo comum no lugar da pasta: o H2 não consegue criar o banco ali
         Path arquivo = Files.writeString(temp.resolve("nao-e-pasta"), "x");
-        try (BancoLocal banco = BancoLocal.emArquivo(arquivo.resolve("sica"))) {
+        try (BancoLocal banco = BancoLocal.emArquivo(arquivo.resolve("avion"))) {
             assertTrue(banco.abrir().isEmpty());
             assertFalse(banco.disponivel());
             assertNotNull(banco.erro(), "o erro fica guardado para o console");
@@ -66,7 +66,7 @@ class BancoLocalTest {
 
     @Test
     void emArquivoAbreECriaOEsquema() {
-        try (BancoLocal banco = BancoLocal.emArquivo(temp.resolve("sica"))) {
+        try (BancoLocal banco = BancoLocal.emArquivo(temp.resolve("avion"))) {
             assertEquals(4, banco.abrir().orElseThrow().pessoas().listar().size());
         }
     }

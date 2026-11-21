@@ -16,16 +16,16 @@ import java.util.regex.Pattern;
  * Onde o programa guarda e lê arquivos.
  * <p>
  * Em desenvolvimento (gradlew run), tudo é relativo à pasta do projeto, como sempre foi. Instalado
- * (pelo instalador do jpackage, em %LOCALAPPDATA%\SICA), a pasta do programa não guarda dados do usuário:
- * o banco e o cache dos cartões vão para %APPDATA%\SICA e os screenshots para Imagens\SICA.
- * O lançador do jpackage define a propriedade {@code jpackage.app-path} (o caminho do SICA.exe):
+ * (pelo instalador do jpackage, em %LOCALAPPDATA%\AVION), a pasta do programa não guarda dados do usuário:
+ * o banco e o cache dos cartões vão para %APPDATA%\AVION e os screenshots para Imagens\AVION.
+ * O lançador do jpackage define a propriedade {@code jpackage.app-path} (o caminho do AVION.exe):
  * é assim que o programa sabe que está instalado.
  */
 public final class AppPaths {
 
     /** Definida pelo lançador do jpackage: caminho do executável. */
     public static final String APP_PATH_PROPERTY = "jpackage.app-path";
-    public static final String APP_FOLDER = "SICA";
+    public static final String APP_FOLDER = "AVION";
 
     private static final Pattern REG_PICTURES = Pattern.compile("My Pictures\\s+REG_(?:EXPAND_)?SZ\\s+(.+)");
     private static final Pattern VARIABLE = Pattern.compile("%([^%]+)%");
@@ -60,7 +60,7 @@ public final class AppPaths {
         return properties.apply(APP_PATH_PROPERTY) != null;
     }
 
-    /** Pasta do programa instalado (onde está o SICA.exe); em desenvolvimento, a pasta atual. */
+    /** Pasta do programa instalado (onde está o AVION.exe); em desenvolvimento, a pasta atual. */
     public Path appDir() {
         String exe = properties.apply(APP_PATH_PROPERTY);
         return exe == null ? Path.of("").toAbsolutePath() : Path.of(exe).toAbsolutePath().getParent();
@@ -72,7 +72,7 @@ public final class AppPaths {
         if (custom != null && !custom.isBlank()) {
             return Path.of(custom);
         }
-        return installed() ? userFolder("APPDATA").resolve("sica") : Path.of("dados", "sica");
+        return installed() ? userFolder("APPDATA").resolve("avion") : Path.of("dados", "avion");
     }
 
     /** Cópias dos .jar lidos dos cartões (data loading). Instalado, junto do banco, fora da pasta do programa. */
@@ -150,10 +150,10 @@ public final class AppPaths {
         return installed() ? appDir().resolve("sd-dev") : Path.of("sd-dev");
     }
 
-    /** %APPDATA%\SICA; sem a variável (Linux, testes), ~/.sica. */
+    /** %APPDATA%\AVION; sem a variável (Linux, testes), ~/.avion. */
     private Path userFolder(String variable) {
         String base = environment.apply(variable);
-        return base == null || base.isBlank() ? home().resolve(".sica") : Path.of(base).resolve(APP_FOLDER);
+        return base == null || base.isBlank() ? home().resolve(".avion") : Path.of(base).resolve(APP_FOLDER);
     }
 
     private Path home() {

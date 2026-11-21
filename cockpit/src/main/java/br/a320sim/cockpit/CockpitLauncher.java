@@ -17,7 +17,7 @@ public final class CockpitLauncher {
 
     public static void main(String[] args) {
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-        config.setTitle("SICA");
+        config.setTitle("AVION");
         config.setWindowIcon(FileType.Classpath, ICONS);
         // -Dsim.janela=1920x1009 abre a janela nesse tamanho (para testar a ampliação em telas grandes)
         String[] size = System.getProperty("sim.janela", "").split("x");

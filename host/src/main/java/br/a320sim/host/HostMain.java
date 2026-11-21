@@ -68,7 +68,7 @@ public class HostMain {
         System.out.println("""
 
                  ===========================================
-                       S I C A   -   H O S T   v0.1
+                      A V I O N   -   H O S T   v0.1
                  ===========================================
                          __|__
                   --------(_)--------      INSIRA OS

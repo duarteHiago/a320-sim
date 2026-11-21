@@ -77,7 +77,7 @@ public class IntroScreen extends RetroScreen {
         }
 
         if (time > LOGO_LAND) {
-            d.text("SIMULADOR INTEGRADO DE CONFIGURACAO AERONAUTICA", WIDTH / 2f, 166, GREY, Align.CENTER);
+            d.text("AMBIENTE VIRTUAL DE INTEGRACAO E OPERACAO DE NAVEGACAO", WIDTH / 2f, 166, GREY, Align.CENTER);
         }
         if (time > 1.9f) {
             d.text("CARTRIDGE AVIONICS SYSTEM", WIDTH / 2f, 98, GREY, Align.CENTER);
@@ -87,7 +87,7 @@ public class IntroScreen extends RetroScreen {
             d.text(MenuInput.hasController() ? "APERTE START" : "APERTE ENTER", WIDTH / 2f, 46, Color.WHITE,
                     Align.CENTER, 2);
         }
-        d.text("(c) 2026  SICA", WIDTH / 2f, 12, DIM, Align.CENTER);
+        d.text("(c) 2026  AVION", WIDTH / 2f, 12, DIM, Align.CENTER);
     }
 
     @Override

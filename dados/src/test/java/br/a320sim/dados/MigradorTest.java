@@ -39,7 +39,7 @@ class MigradorTest {
 
     @Test
     void bancoEmArquivoGuardaOsDadosEntreAberturas() throws SQLException {
-        Path caminho = temp.resolve("sica");
+        Path caminho = temp.resolve("avion");
         try (Banco banco = Banco.arquivo(caminho); Statement st = banco.conexao().createStatement()) {
             st.execute("DELETE FROM cartao");
         }
@@ -47,7 +47,7 @@ class MigradorTest {
             assertEquals(0, contar(banco.conexao(), "cartao"), "reabrir não roda o seed de novo");
             assertEquals(4, Migrador.versaoAtual(banco.conexao()));
         }
-        assertTrue(caminho.resolveSibling("sica.mv.db").toFile().isFile());
+        assertTrue(caminho.resolveSibling("avion.mv.db").toFile().isFile());
     }
 
     @Test

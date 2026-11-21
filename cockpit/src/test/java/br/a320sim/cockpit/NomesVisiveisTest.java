@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * O simulador se chama SICA: o nome antigo não pode voltar para os textos do programa.
+ * O simulador se chama AVION: os nomes antigos (A320 e SICA) não podem voltar para os textos do programa.
  * Varre os textos entre aspas (e os text blocks) de src/main do cockpit e do host; "A320" só vale
  * dentro de um part number, como PLT-A320-CEO.
  */
@@ -25,7 +25,8 @@ class NomesVisiveisTest {
     private static final Pattern PART_NUMBER = Pattern.compile("(PLT|PRP|CKP)-A320-(CEO|NEO)");
     private static final Pattern TEXT_BLOCK = Pattern.compile("\"\"\"(.*?)\"\"\"", Pattern.DOTALL);
     private static final Pattern STRING = Pattern.compile("\"((?:[^\"\\\\\\n]|\\\\.)*)\"");
-    private static final String OLD_NAME = "A320";
+    /** A320 em qualquer lugar; SICA só como palavra inteira (MUSICA e FISICA podem). */
+    private static final Pattern OLD_NAME = Pattern.compile("A320|(?i:\\bSICA\\b)");
 
     /** Raiz do projeto: vem do Gradle; sem ele, sobe as pastas até achar o settings.gradle. */
     static Path projectRoot() {
@@ -65,7 +66,7 @@ class NomesVisiveisTest {
     }
 
     private static void check(String fileName, String source, int offset, String text, List<String> found) {
-        if (PART_NUMBER.matcher(text).replaceAll("").contains(OLD_NAME)) {
+        if (OLD_NAME.matcher(PART_NUMBER.matcher(text).replaceAll("")).find()) {
             long line = source.substring(0, offset).chars().filter(c -> c == '\n').count() + 1;
             found.add(fileName + ":" + line + "  \"" + text.strip() + "\"");
         }
@@ -87,7 +88,7 @@ class NomesVisiveisTest {
             }
         }
         assertTrue(files > 50, "leu so " + files + " arquivos: a raiz " + root + " esta certa?");
-        assertEquals(List.of(), found, "Textos com o nome antigo (use SICA / JATO BIMOTOR):\n" + String.join("\n", found));
+        assertEquals(List.of(), found, "Textos com o nome antigo (use AVION / JATO BIMOTOR):\n" + String.join("\n", found));
     }
 
     @Test
@@ -100,10 +101,14 @@ class NomesVisiveisTest {
                     String banner = \"""
                         A320 SIM
                         \""";
+                    String musica = "MUSICA DE FUNDO";
+                    String tag = "SICA";
+                    String shot = "sica-123.png";
                 }
                 """;
         // Os text blocks são lidos primeiro, depois os textos entre aspas
-        assertEquals(List.of("X.java:5  \"A320 SIM\"", "X.java:4  \"MONTE SEU A320\""), violations("X.java", source));
+        assertEquals(List.of("X.java:5  \"A320 SIM\"", "X.java:4  \"MONTE SEU A320\"",
+                "X.java:9  \"SICA\"", "X.java:10  \"sica-123.png\""), violations("X.java", source));
     }
 
     private static String read(Path file) {
