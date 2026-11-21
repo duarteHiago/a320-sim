@@ -240,7 +240,7 @@ public class RackScreen extends RetroScreen {
             host.rack().remove(group);
             host.rack().insert(preview.get(group));
         }
-        app.setScreen(new BootScreen(app));
+        app.showNewSession();
     }
 
     @Override

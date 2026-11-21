@@ -112,7 +112,7 @@ public class CockpitScreen extends RetroScreen {
             app.sound().play(Sfx.BACK);
             session.close();
             if (session.acceptsCommands()) {
-                app.setScreen(new RackScreen(app));
+                app.showRack();
             } else {
                 app.showTitle();
             }

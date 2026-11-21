@@ -6,17 +6,22 @@ import br.a320sim.cockpit.crud.CartoesAdapter;
 import br.a320sim.cockpit.crud.PessoasAdapter;
 import br.a320sim.cockpit.crud.PosicoesAdapter;
 import br.a320sim.cockpit.crud.SessoesAdapter;
+import br.a320sim.cockpit.screen.BootScreen;
 import br.a320sim.cockpit.screen.CadastrosScreen;
 import br.a320sim.cockpit.screen.CockpitScreen;
 import br.a320sim.cockpit.screen.ConnectScreen;
 import br.a320sim.cockpit.screen.CrudScreen;
 import br.a320sim.cockpit.screen.IntroScreen;
 import br.a320sim.cockpit.screen.IosScreen;
+import br.a320sim.cockpit.screen.NovaSessaoScreen;
 import br.a320sim.cockpit.screen.RackScreen;
 import br.a320sim.cockpit.screen.TitleScreen;
 import br.a320sim.cockpit.session.LocalSession;
+import br.a320sim.cockpit.session.SessionKeeper;
+import br.a320sim.cockpit.session.SessionPlan;
 import br.a320sim.dados.BancoLocal;
 import br.a320sim.dados.Dados;
+import br.a320sim.dados.modelo.Sessao;
 import br.a320sim.host.Host;
 import br.a320sim.host.cartridge.AutoReader;
 import br.a320sim.host.cartridge.CartridgeLibrary;
@@ -25,6 +30,7 @@ import br.a320sim.host.cartridge.ClasspathModuleFactory;
 import br.a320sim.host.cartridge.HotPlug;
 import br.a320sim.net.SimServer;
 import com.badlogic.gdx.Game;
+import com.badlogic.gdx.Gdx;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -44,6 +50,9 @@ public class SimApp extends Game {
 
     private Host host;
     private final BancoLocal banco = BancoLocal.doSistema();
+    private SessionKeeper sessions;
+    /** O que foi escolhido na última NOVA SESSAO (vira o padrão da próxima). */
+    private SessionPlan plan = SessionPlan.NONE;
     private CartridgeLibrary library;
     private HotPlug hotPlug;
     private SoundFx sound;
@@ -58,6 +67,7 @@ public class SimApp extends Game {
                 new CartridgeLoader(new ClasspathModuleFactory(), banco.politica()));
         library.startWatching(WATCH_MILLIS);
         hotPlug = new HotPlug(host, library);
+        sessions = new SessionKeeper(host, banco);
         sound = new SoundFx();
 
         // Atalhos de linha de comando, usados para testar sem passar pelos menus
@@ -82,6 +92,7 @@ public class SimApp extends Game {
     }
 
     public void showTitle() {
+        sessions.finish();
         host.powerOff();
         closeServer();
         setScreen(new TitleScreen(this));
@@ -111,6 +122,31 @@ public class SimApp extends Game {
         setScreen(new ConnectScreen(this));
     }
 
+    /** Desliga o avião (fechando a sessão) e volta para a montagem do rack. */
+    public void showRack() {
+        sessions.finish();
+        host.powerOff();
+        setScreen(new RackScreen(this));
+    }
+
+    /** Rack montado: escolhe aluno, instrutor e posição antes de ligar. */
+    public void showNewSession() {
+        setScreen(new NovaSessaoScreen(this));
+    }
+
+    public void startBoot(SessionPlan chosen) {
+        plan = chosen;
+        setScreen(new BootScreen(this));
+    }
+
+    public SessionPlan lastPlan() {
+        return plan;
+    }
+
+    public SessionKeeper sessions() {
+        return sessions;
+    }
+
     public void showCadastros() {
         setScreen(new CadastrosScreen(this));
     }
@@ -133,6 +169,7 @@ public class SimApp extends Game {
 
     /** Depois do boot: o instrutor vai para a estação dele, no SOLO o próprio aluno pilota. */
     public void afterBoot() {
+        sessions.start(plan, mode == Mode.INSTRUCTOR ? Sessao.INSTRUTOR : Sessao.SOLO);
         if (mode == Mode.INSTRUCTOR) {
             setScreen(new IosScreen(this));
         } else {
@@ -147,6 +184,9 @@ public class SimApp extends Game {
     @Override
     public void render() {
         super.render();
+        if (mode != Mode.STUDENT) {
+            sessions.update(Gdx.graphics.getDeltaTime());
+        }
         if (mode != Mode.STUDENT && host.isPowered()) {
             for (String event : hotPlug.update()) {
                 System.out.println("[RACK] " + event);
@@ -200,6 +240,7 @@ public class SimApp extends Game {
     @Override
     public void dispose() {
         super.dispose(); // chama hide() da tela atual, que se descarta
+        sessions.finish(); // fechar a janela também fecha a sessão
         closeServer();
         library.close();
         banco.close();

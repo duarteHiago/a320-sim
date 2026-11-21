@@ -9,10 +9,12 @@ import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
 import br.a320sim.flightmodel.FlightModel;
 import br.a320sim.host.Host;
-import br.a320sim.host.command.FinalApproachCommand;
+import br.a320sim.cockpit.audio.Sfx;
+import br.a320sim.dados.DadosException;
+import br.a320sim.dados.modelo.Posicao;
+import br.a320sim.host.command.ApplyPositionCommand;
 import br.a320sim.host.command.FreezeCommand;
 import br.a320sim.host.command.InstantAlignCommand;
-import br.a320sim.host.command.RepositionCommand;
 import br.a320sim.host.command.ResetToRunwayCommand;
 import br.a320sim.host.command.SendMessageCommand;
 import br.a320sim.host.command.ToggleFailureCommand;
@@ -65,6 +67,10 @@ public class IosScreen extends RetroScreen {
     private final TextInput message = new TextInput("", 60);
     private final Rectangle messageField = new Rectangle(6, 6, 628, 22);
     private final String addresses;
+    /** Posições cadastradas; o botão POS alterna entre elas e IR P/ POSICAO aplica. */
+    private final List<Posicao> positions = new ArrayList<>();
+    private final boolean hasDatabase;
+    private int position;
     private float snapshotTimer;
     private double trailTimer;
     private float time;
@@ -81,20 +87,59 @@ public class IosScreen extends RetroScreen {
             y -= 28;
         }
 
-        String[] labels = {"PISTA", "EM VOO", "NA FINAL", "ALINHAR IR", "CARTUCHOS"};
-        Runnable[] actions = {
-                () -> host.execute(new ResetToRunwayCommand()),
-                () -> host.execute(new RepositionCommand(8000, 250)),
-                () -> host.execute(new FinalApproachCommand()),
-                () -> host.execute(new InstantAlignCommand()),
-                this::backToRack};
+        hasDatabase = loadPositions();
         buttons.add(new RetroButton(6, 34, 100, 22,
                 () -> host.bus().getBoolean(Labels.SIM_FREEZE) ? "CONTINUAR" : "PAUSAR",
                 () -> host.bus().getBoolean(Labels.SIM_FREEZE), YELLOW,
                 () -> host.execute(new FreezeCommand(!host.bus().getBoolean(Labels.SIM_FREEZE)))));
-        for (int i = 0; i < labels.length; i++) {
-            buttons.add(new RetroButton(112 + i * 105.6f, 34, 99, 22, labels[i], actions[i]));
+        buttons.add(new RetroButton(112, 34, 74, 22, "PISTA", () -> host.execute(new ResetToRunwayCommand())));
+        buttons.add(new RetroButton(192, 34, 138, 22, this::positionLabel, () -> false, Color.WHITE,
+                this::nextPosition));
+        buttons.add(new RetroButton(336, 34, 96, 22, "IR P/ POSICAO", this::goToPosition));
+        buttons.add(new RetroButton(438, 34, 96, 22, "ALINHAR IR", () -> host.execute(new InstantAlignCommand())));
+        buttons.add(new RetroButton(540, 34, 94, 22, "CARTUCHOS", this::backToRack));
+    }
+
+    /** Lê as posições do cadastro e começa na escolhida na NOVA SESSAO. */
+    private boolean loadPositions() {
+        var dados = app.banco().dados();
+        if (dados.isEmpty()) {
+            return false;
         }
+        try {
+            positions.addAll(dados.get().posicoes().listar());
+        } catch (DadosException e) {
+            System.err.println("[IOS] " + e.getMessage());
+            return false;
+        }
+        Posicao chosen = app.lastPlan().posicao();
+        for (int i = 0; chosen != null && i < positions.size(); i++) {
+            if (positions.get(i).id().equals(chosen.id())) {
+                position = i;
+            }
+        }
+        return true;
+    }
+
+    private String positionLabel() {
+        return positions.isEmpty() ? "POS: SEM BANCO" : "POS: " + positions.get(position).nome();
+    }
+
+    private void nextPosition() {
+        if (!positions.isEmpty()) {
+            position = (position + 1) % positions.size();
+            app.sound().play(Sfx.MOVE);
+        }
+    }
+
+    private void goToPosition() {
+        if (positions.isEmpty()) {
+            app.sound().play(Sfx.ERROR);
+            return;
+        }
+        Posicao p = positions.get(position);
+        app.host().execute(new ApplyPositionCommand(p.nome(), p.altitudeFt(), p.velocidadeKt(), p.proaGraus(),
+                p.distanciaNm()));
     }
 
     @Override
@@ -109,8 +154,7 @@ public class IosScreen extends RetroScreen {
     }
 
     private void backToRack() {
-        app.host().powerOff();
-        app.setScreen(new RackScreen(app));
+        app.showRack();
     }
 
     @Override
@@ -208,6 +252,11 @@ public class IosScreen extends RetroScreen {
 
     private void header(Draw d) {
         d.text("IOS", 6, 350, YELLOW, Align.LEFT);
+        if (!hasDatabase) {
+            d.text("SEM BANCO", 36, 350, RED, Align.LEFT);
+        } else if (app.sessions().recording()) {
+            d.text("SESSAO: " + app.lastPlan().aluno().nome(), 36, 350, GREEN, Align.LEFT);
+        }
         SimServer server = app.server();
         if (server == null) {
             d.text("SEM SERVIDOR DE REDE", 634, 350, RED, Align.RIGHT);

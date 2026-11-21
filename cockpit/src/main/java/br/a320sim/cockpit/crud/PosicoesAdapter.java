@@ -113,7 +113,7 @@ public final class PosicoesAdapter implements CrudAdapter<Posicao> {
     }
 
     /** 10.0 -> "10", 5.5 -> "5.5" */
-    static String formatar(double nm) {
+    public static String formatar(double nm) {
         return nm == Math.rint(nm) ? String.valueOf((long) nm) : String.valueOf(nm);
     }
 }
