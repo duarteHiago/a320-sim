@@ -6,3 +6,6 @@ build/
 .vscode/
 cache/
 screenshots/
+chaves/
+*.key
+bin/

@@ -1,5 +1,7 @@
 package br.a320sim.host.cartridge;
 
+import br.a320sim.core.cartridge.CartridgeRejectedException;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.MalformedURLException;
@@ -33,10 +35,19 @@ public class JarCartridgeLoader implements AutoCloseable {
         this.cacheDir = cacheDir;
     }
 
-    public synchronized ClassLoader classLoaderFor(String partNumber, Path jarOnCard) {
+    /**
+     * @param expectedSha256 o hash que a assinatura garantiu; os bytes lidos aqui têm que bater com ele
+     *                       (o cartão pode ter sido trocado entre a verificação e a cópia)
+     */
+    public synchronized ClassLoader classLoaderFor(String partNumber, Path jarOnCard, String expectedSha256) {
         try {
             byte[] bytes = Files.readAllBytes(jarOnCard);
-            String hash = sha256(bytes).substring(0, 12);
+            String fullHash = sha256(bytes);
+            if (!fullHash.equals(expectedSha256)) {
+                throw new CartridgeRejectedException(CartridgeRejectedException.Reason.ARQUIVO_CORROMPIDO,
+                        jarOnCard.getFileName() + " mudou depois da verificação");
+            }
+            String hash = fullHash.substring(0, 12);
             URLClassLoader cached = byHash.get(hash);
             if (cached != null) {
                 return cached;

@@ -13,6 +13,24 @@ def sdOut = layout.buildDirectory.dir('sd')
 def cardJarName = 'caixas.jar'
 
 // ---------------------------------------------------------------------------------------------
+// Assinatura dos cartões (Ed25519). A chave privada é da "fábrica": fica em chaves/ e NUNCA vai
+// para o Git (está no .gitignore). A pública vai dentro do programa, que só aceita cartões
+// assinados por ela. Sem a privada, as imagens saem sem assinatura e o simulador as recusa.
+// ---------------------------------------------------------------------------------------------
+def privateKeyFile = rootProject.file('chaves/fabrica-privada.key')
+def publicKeyFile = rootProject.file('host/src/main/resources/chave-publica-cartuchos.txt')
+def signerMain = 'br.a320sim.core.cartridge.CartridgeSignature'
+
+tasks.register('gerarChaves', JavaExec) {
+    group = 'cartuchos'
+    description = 'Cria o par de chaves da fábrica (uma vez só, para a equipe toda)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = signerMain
+    jvmArgs '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+    args 'gerar-chaves', privateKeyFile.absolutePath, publicKeyFile.absolutePath
+}
+
+// ---------------------------------------------------------------------------------------------
 // sdImages: build/sd/<PN>/{cartridge.json, caixas.jar}, uma pasta por cartão, pronta para copiar
 // ---------------------------------------------------------------------------------------------
 def imageTasks = []
@@ -50,7 +68,22 @@ def imageTasks = []
             target.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson(json))
         }
     }
-    imageTasks << imageTask
+    def signTask = tasks.register("assinarSd_${pn}", JavaExec) {
+        group = 'cartuchos'
+        description = "Assina a imagem do cartão ${pn} (checksum.sha256 + assinatura.sig)"
+        dependsOn imageTask
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = signerMain
+        jvmArgs '-Dstdout.encoding=UTF-8', '-Dstderr.encoding=UTF-8'
+        def cardDir = sdOut.get().dir(pn).asFile
+        args 'assinar', cardDir.absolutePath, privateKeyFile.absolutePath, 'cartridge.json', cardJarName
+        doFirst {
+            // Uma assinatura velha não pode sobrar ao lado de um .jar novo
+            new File(cardDir, 'checksum.sha256').delete()
+            new File(cardDir, 'assinatura.sig').delete()
+        }
+    }
+    imageTasks << signTask
 }
 
 tasks.register('sdImages') {
@@ -80,6 +113,10 @@ tasks.register('gravarSd') {
             def known = sdOut.get().asFile.list()?.sort()?.join(', ')
             throw new GradleException("Cartão ${pn} não existe. Opções: ${known}")
         }
+        if (!new File(image, 'assinatura.sig').isFile()) {
+            throw new GradleException("A imagem de ${pn} não está assinada (falta chaves/fabrica-privada.key). " +
+                    'Rode gradlew :cartridges:gerarChaves ou peça a chave a quem grava os cartões.')
+        }
 
         letter = letter.toString().replaceAll(/[:\\\/\s]/, '').toUpperCase()
         if (letter.length() != 1) {
@@ -104,11 +141,13 @@ tasks.register('gravarSd') {
             def oldPn = new JsonSlurper().parse(old).partNumber
             println "${letter}: tinha o cartão ${oldPn}; regravando como ${pn}"
         }
+        // Apaga a assinatura antiga antes de copiar: se a cópia parar no meio, o cartão é recusado
+        new File(root, 'assinatura.sig').delete()
         project.copy {
             from image
             into root
         }
-        println "OK: ${pn} gravado em ${letter}:  (cartridge.json + ${cardJarName})"
+        println "OK: ${pn} gravado em ${letter}:  (cartridge.json + ${cardJarName} + checksum.sha256 + assinatura.sig)"
         println "Dica: 'label ${letter}: ${pn.replace('-A320-', '-')}' dá nome ao cartão no Explorer."
     }
 }

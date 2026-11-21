@@ -26,7 +26,36 @@ Regra: **PROPULSAO neo exige COCKPIT neo**.
 
 ## Cartões SD
 
-Cada cartão leva só dois arquivos na raiz: `cartridge.json` (o manifesto) e `caixas.jar` (o software das duas caixas daquele cartão). O simulador varre os leitores a cada ~0,7 s; o **grupo vem do manifesto**, então não importa em qual leitor do hub o cartão entra.
+Cada cartão leva quatro arquivos na raiz:
+
+| Arquivo | Para que serve |
+|---|---|
+| `cartridge.json` | o manifesto (grupo, versão, caixas, requisitos) |
+| `caixas.jar` | o software das duas caixas daquele cartão |
+| `checksum.sha256` | o SHA-256 de `cartridge.json` e `caixas.jar` (**integridade**) |
+| `assinatura.sig` | a assinatura Ed25519 do checksum, feita com a chave da fábrica (**autenticidade**) |
+
+O simulador varre os leitores a cada ~0,7 s; o **grupo vem do manifesto**, então não importa em qual leitor do hub o cartão entra.
+
+**Assinatura dos cartões.** Antes de carregar qualquer classe do `caixas.jar`, o data loader confere a assinatura com a chave pública que vai dentro do programa e depois o hash de cada arquivo. Se algo não bate, o cartão é **RECUSADO** e nenhum código dele roda:
+
+| Mensagem | Quando acontece |
+|---|---|
+| `RECUSADO: SEM ASSINATURA` | faltam `checksum.sha256` ou `assinatura.sig` |
+| `RECUSADO: ASSINATURA INVALIDA` | assinado com outra chave, ou checksum editado |
+| `RECUSADO: ARQUIVO CORROMPIDO` | o `.jar` ou o manifesto mudou depois de assinado |
+| `RECUSADO: ARQUIVO FALTANDO` | um arquivo listado no checksum sumiu |
+| `RECUSADO: SEM CHAVE PUBLICA` | o programa foi compilado sem a chave da fábrica |
+
+Para conferir um cartão no terminal (Git Bash ou Linux): `sha256sum -c checksum.sha256` dentro da unidade.
+
+**Chaves (uma vez só, para a equipe toda).** Quem grava os cartões roda:
+
+```
+gradlew :cartridges:gerarChaves
+```
+
+Isso cria `chaves/fabrica-privada.key` (**nunca vai para o Git**, já está no `.gitignore`; guarde uma cópia e passe para a equipe por fora do GitHub) e `host/src/main/resources/chave-publica-cartuchos.txt` (essa vai para o Git). Gerar chaves novas invalida todos os cartões já gravados. Sem a chave privada, `sdImages` gera imagens sem assinatura e `gravarSd` se recusa a gravar. Os testes usam uma chave própria e não dependem da chave da equipe.
 
 **Gravar os 6 cartões** (uma vez, ou de novo quando o software das caixas mudar). Com o cartão no leitor, veja a letra dele no Explorer e rode:
 
@@ -34,7 +63,7 @@ Cada cartão leva só dois arquivos na raiz: `cartridge.json` (o manifesto) e `c
 gradlew :cartridges:gravarSd -Pcartao=PLT-A320-CEO -Pdrive=G
 ```
 
-Repita para `PLT-A320-NEO`, `PRP-A320-CEO`, `PRP-A320-NEO`, `CKP-A320-CEO` e `CKP-A320-NEO`, e etiquete cada cartão. A tarefa só copia os dois arquivos (não formata); ela recusa a unidade do sistema, a do projeto e qualquer unidade com mais de 64 GB. `gradlew :cartridges:sdImages` só gera as imagens em `cartridges/build/sd/`.
+Repita para `PLT-A320-NEO`, `PRP-A320-CEO`, `PRP-A320-NEO`, `CKP-A320-CEO` e `CKP-A320-NEO`, e etiquete cada cartão. A tarefa só copia os quatro arquivos (não formata); ela recusa a unidade do sistema, a do projeto e qualquer unidade com mais de 64 GB. `gradlew :cartridges:sdImages` só gera as imagens em `cartridges/build/sd/`.
 
 **Usando:**
 
@@ -60,7 +89,7 @@ Outras opções: `-Dsim.sd.drives=G,H,I` limita a busca a essas letras; `-Dsim.s
 - `host`: o "supercomputador" (rack, cartuchos, loop de simulação, falhas, comandos do instrutor)
 - `net`: comunicação TCP entre o PC do instrutor e o do aluno
 - `cockpit`: o programa gráfico em LibGDX (título, rack, boot, cockpit, estação do instrutor)
-- `sd-dev/`: pastas que fingem ser cartões SD durante o desenvolvimento (e a fonte das imagens gravadas nos cartões)
+- `sd-dev/`: pastas que fingem ser cartões SD durante o desenvolvimento (e a fonte das imagens gravadas nos cartões). Elas não têm `.jar`, então não passam pela assinatura: o software vem do próprio programa
 
 ## Rodar
 

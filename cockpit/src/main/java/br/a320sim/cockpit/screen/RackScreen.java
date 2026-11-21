@@ -8,6 +8,7 @@ import br.a320sim.cockpit.input.MenuInput;
 import br.a320sim.core.cartridge.Cartridge;
 import br.a320sim.core.cartridge.CartridgeGroup;
 import br.a320sim.core.cartridge.CartridgeManifest;
+import br.a320sim.core.cartridge.CartridgeRejectedException;
 import br.a320sim.core.cartridge.Generation;
 import br.a320sim.core.module.AvionicsModule;
 import br.a320sim.host.Host;
@@ -213,6 +214,9 @@ public class RackScreen extends RetroScreen {
                     Cartridge cartridge = app.library().load(detected);
                     preview.put(group, cartridge);
                     rack.insert(cartridge);
+                } catch (CartridgeRejectedException e) {
+                    loadErrors.add("CARTAO " + detected.partNumber() + " RECUSADO: " + e.reason().label());
+                    System.err.println("[RACK] " + detected.partNumber() + ": " + e.getMessage());
                 } catch (RuntimeException e) {
                     loadErrors.add("CARTAO " + detected.partNumber() + " ILEGIVEL");
                     System.err.println("[RACK] " + detected.partNumber() + ": " + e.getMessage());

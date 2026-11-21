@@ -2,6 +2,7 @@ package br.a320sim.host.cartridge;
 
 import br.a320sim.core.cartridge.Cartridge;
 import br.a320sim.core.cartridge.CartridgeGroup;
+import br.a320sim.core.cartridge.CartridgeRejectedException;
 import br.a320sim.host.Host;
 
 import java.util.ArrayList;
@@ -60,6 +61,9 @@ public class HotPlug {
         Cartridge cartridge;
         try {
             cartridge = library.load(detected);
+        } catch (CartridgeRejectedException e) {
+            events.add("CARTUCHO " + detected.partNumber() + " RECUSADO: " + e.reason().label());
+            return;
         } catch (RuntimeException e) {
             events.add("CARTUCHO " + detected.partNumber() + " ILEGIVEL");
             return;
