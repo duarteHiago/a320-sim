@@ -58,6 +58,9 @@ public class IosScreen extends RetroScreen {
     private static final Color RED = Color.valueOf("ff3a30");
     private static final Color YELLOW = Color.valueOf("ffff48");
     private static final Color MAGENTA = Color.valueOf("ff58ff");
+    private static final Color CYAN_TEXT = Color.valueOf("38e8ff");
+    /** Quantos caracteres do log cabem na coluna da direita. */
+    private static final int LOG_CHARS = 48;
 
     private static final float MAP_X = 6;
     private static final float MAP_Y = 64;
@@ -285,8 +288,18 @@ public class IosScreen extends RetroScreen {
         if (!hasDatabase) {
             d.text("SEM BANCO", 36, 350, RED, Align.LEFT);
         } else if (app.sessions().recording()) {
-            d.text("SESSAO: " + app.lastPlan().aluno().nome(), 36, 350, GREEN, Align.LEFT);
+            String name = app.lastPlan().aluno().nome();
+            d.text("SESSAO: " + (name.length() > 18 ? name.substring(0, 18) : name), 36, 350, GREEN, Align.LEFT);
         }
+        // Plano de voo do aluno (MCDU): sem ele a decolagem não é bloqueada, mas o instrutor vê
+        app.host().plan().plan().ifPresentOrElse(
+                p -> d.text(p.origin() + ">" + p.destinationRunway() + " FL" + p.cruiseFl(), 206, 350, CYAN_TEXT,
+                        Align.LEFT),
+                () -> {
+                    if ((time % 1.2f) < 0.9f) {
+                        d.text("SEM PLANO", 206, 350, AMBER, Align.LEFT);
+                    }
+                });
         SimServer server = app.server();
         if (server == null) {
             d.text("SEM SERVIDOR DE REDE", 634, 350, RED, Align.RIGHT);
@@ -383,7 +396,8 @@ public class IosScreen extends RetroScreen {
         for (int i = Math.max(0, entries.size() - 2); i < entries.size(); i++) {
             Host.LoggedCommand entry = entries.get(i);
             int seconds = (int) entry.simTime();
-            d.text(String.format("%02d:%02d %s", seconds / 60, seconds % 60, entry.description()), 342, y, GREY,
+            String line = String.format("%02d:%02d %s", seconds / 60, seconds % 60, entry.description());
+            d.text(line.length() > LOG_CHARS ? line.substring(0, LOG_CHARS - 2) + ".." : line, 342, y, GREY,
                     Align.LEFT);
             y -= 14;
         }

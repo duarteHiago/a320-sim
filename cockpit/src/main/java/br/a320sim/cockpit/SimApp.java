@@ -26,6 +26,7 @@ import br.a320sim.host.Host;
 import br.a320sim.host.command.ReleaseBirdsCommand;
 import br.a320sim.host.command.SetAutoBirdsCommand;
 import br.a320sim.host.command.SetWeatherCommand;
+import br.a320sim.host.plan.FlightPlan;
 import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.host.cartridge.AutoReader;
 import br.a320sim.host.cartridge.CartridgeLibrary;
@@ -181,6 +182,13 @@ public class SimApp extends Game {
             host.execute(new ReleaseBirdsCommand());
         } else if (birds.equals("auto")) {
             host.execute(new SetAutoBirdsCommand(true));
+        }
+        // Atalho de teste: no modo INSTRUTOR, -Dsim.plano=... faz de conta que o aluno inseriu esse plano no MCDU
+        String[] planValues = System.getProperty("sim.plano", "").split(",");
+        if (mode == Mode.INSTRUCTOR && planValues.length == 9) {
+            new FlightPlan(planValues[0], planValues[1], planValues[2], Integer.parseInt(planValues[3]),
+                    Integer.parseInt(planValues[4]), Integer.parseInt(planValues[5]), Integer.parseInt(planValues[6]),
+                    Integer.parseInt(planValues[7]), Integer.parseInt(planValues[8])).publish(host.bus());
         }
         String wind = System.getProperty("sim.vento", "");
         if (wind.matches("[0-2]")) {

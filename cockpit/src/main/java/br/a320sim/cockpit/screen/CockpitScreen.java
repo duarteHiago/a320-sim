@@ -13,6 +13,9 @@ import br.a320sim.cockpit.gfx.Theme;
 import br.a320sim.cockpit.input.ControlInputs;
 import br.a320sim.cockpit.input.AutoInput;
 import br.a320sim.cockpit.input.MenuInput;
+import br.a320sim.cockpit.crud.Campo;
+import br.a320sim.cockpit.crud.FormModel;
+import br.a320sim.cockpit.mcdu.McduPanel;
 import br.a320sim.cockpit.panel.FcuPanel;
 import br.a320sim.cockpit.panel.Glareshield;
 import br.a320sim.cockpit.panel.Pedestal;
@@ -21,6 +24,7 @@ import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
 import br.a320sim.host.command.FinalApproachCommand;
+import br.a320sim.host.plan.FlightPlan;
 import br.a320sim.host.command.FreezeCommand;
 import br.a320sim.host.command.InstantAlignCommand;
 import br.a320sim.host.command.RepositionCommand;
@@ -60,11 +64,22 @@ public class CockpitScreen extends RetroScreen {
     private final Glareshield glareshield = new Glareshield();
     private final AlertSounds alerts = new AlertSounds();
     private final Windshield windshield = new Windshield();
+    private final McduPanel mcdu = new McduPanel();
     private final InputAdapter scrollListener = new InputAdapter() {
         @Override
         public boolean scrolled(float amountX, float amountY) {
             scroll += amountY;
             return true;
+        }
+
+        @Override
+        public boolean keyTyped(char character) {
+            // Com o MCDU aberto, as letras vão para ele (e não pilotam o avião)
+            if (mcdu.isOpen()) {
+                mcdu.form().digitar(character);
+                return true;
+            }
+            return false;
         }
     };
 
@@ -88,6 +103,24 @@ public class CockpitScreen extends RetroScreen {
         if (System.getProperty("sim.final") != null) {
             session.execute(new FinalApproachCommand());
         }
+        // Atalhos de teste: -Dsim.plano=SBKP,SBGR,10L,100,60000,8000,140,143,148 insere um plano;
+        // -Dsim.mcdu abre o MCDU ao entrar na cabine
+        String[] plan = System.getProperty("sim.plano", "").split(",");
+        if (plan.length == 9) {
+            mcdu.open(session.bus());
+            String[] keys = {FlightPlan.FIELD_ORIGIN, FlightPlan.FIELD_DESTINATION, FlightPlan.FIELD_RUNWAY,
+                    FlightPlan.FIELD_FL, FlightPlan.FIELD_ZFW, FlightPlan.FIELD_FUEL, FlightPlan.FIELD_V1,
+                    FlightPlan.FIELD_VR, FlightPlan.FIELD_V2};
+            for (int i = 0; i < keys.length; i++) {
+                typeInto(keys[i], plan[i].strip());
+            }
+            if (mcdu.insert(session.bus())) {
+                mcdu.close(); // com erro, fica aberto mostrando os campos em vermelho
+            }
+        }
+        if (System.getProperty("sim.mcdu") != null) {
+            mcdu.open(session.bus());
+        }
     }
 
     @Override
@@ -107,6 +140,20 @@ public class CockpitScreen extends RetroScreen {
     protected void update(float delta) {
         time += delta;
         DataBus bus = session.bus();
+
+        if (Gdx.input.isKeyJustPressed(Keys.F1)) {
+            if (mcdu.isOpen()) {
+                mcdu.close();
+            } else {
+                mcdu.open(bus);
+            }
+            app.sound().play(Sfx.CLICK);
+        }
+        if (mcdu.isOpen()) {
+            updateMcdu(bus);
+            keepFlying(bus, delta);
+            return;
+        }
 
         if (Gdx.input.isKeyJustPressed(Keys.ESCAPE) || MenuInput.exit()) {
             app.sound().play(Sfx.BACK);
@@ -162,6 +209,62 @@ public class CockpitScreen extends RetroScreen {
         scroll = 0;
         fcu.publish(bus);
 
+        session.update(delta);
+        for (CockpitDisplay display : displays) {
+            display.update(bus, delta);
+        }
+        alerts.update(bus, delta, app.sound());
+        cabinSound(bus);
+        checkInstructorMessage(bus, delta);
+    }
+
+    /** Põe um valor num campo do MCDU como se fosse pelo teclado (só para os atalhos de teste). */
+    private void typeInto(String key, String value) {
+        FormModel form = mcdu.form();
+        if (!form.irPara(key)) {
+            return;
+        }
+        if (form.atual().tipo() == Campo.Tipo.OPCAO) {
+            for (int i = 0; i < 10 && !form.valor(key).equals(value); i++) {
+                form.opcaoSeguinte();
+            }
+            return;
+        }
+        for (int i = form.valor(key).length(); i > 0; i--) {
+            form.digitar('\b');
+        }
+        value.chars().forEach(c -> form.digitar((char) c));
+    }
+
+    /** Teclas do MCDU: setas trocam de campo e opção, ENTER insere o plano, ESC fecha (sem sair da cabine). */
+    private void updateMcdu(DataBus bus) {
+        if (Gdx.input.isKeyJustPressed(Keys.ESCAPE)) {
+            mcdu.close();
+            app.sound().play(Sfx.BACK);
+            return;
+        }
+        FormModel form = mcdu.form();
+        if (Gdx.input.isKeyJustPressed(Keys.DOWN) || Gdx.input.isKeyJustPressed(Keys.TAB)) {
+            form.proximo();
+        }
+        if (Gdx.input.isKeyJustPressed(Keys.UP)) {
+            form.anterior();
+        }
+        if (Gdx.input.isKeyJustPressed(Keys.LEFT)) {
+            form.opcaoAnterior();
+        }
+        if (Gdx.input.isKeyJustPressed(Keys.RIGHT)) {
+            form.opcaoSeguinte();
+        }
+        if (Gdx.input.isKeyJustPressed(Keys.ENTER) || Gdx.input.isKeyJustPressed(Keys.NUMPAD_ENTER)) {
+            app.sound().play(mcdu.insert(bus) ? Sfx.CHIME : Sfx.ERROR);
+        }
+    }
+
+    /** O avião segue voando com os últimos comandos enquanto o aluno digita no MCDU. */
+    private void keepFlying(DataBus bus, float delta) {
+        publishControls(bus);
+        fcu.publish(bus);
         session.update(delta);
         for (CockpitDisplay display : displays) {
             display.update(bus, delta);
@@ -236,6 +339,9 @@ public class CockpitScreen extends RetroScreen {
         String status = session.status();
         if (status != null) {
             banner(d, status, AMBER, 236);
+        }
+        if (mcdu.isOpen()) {
+            mcdu.draw(d, Gdx.graphics.getDeltaTime());
         }
         List<String> missing = bus.getList(Labels.RACK_MISSING);
         if (!missing.isEmpty() && (time % 1f) < 0.7f) {

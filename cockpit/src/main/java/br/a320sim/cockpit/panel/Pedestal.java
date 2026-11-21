@@ -65,7 +65,7 @@ public final class Pedestal {
         } else {
             d.text("W/S A/D manche  Q/E leme  SHIFT/CTRL manete  1-4 IDLE/CL/FLX/TOGA  F/V flaps  G trem",
                     8, 22, HINT, Align.LEFT);
-            d.text("B freio  ESPACO desl.AP  M silencia  P pausa  R pista  T em voo  I alinhar  C vista  ESC rack",
+            d.text("B freio  ESPACO desl.AP  M silencia  P pausa  R pista  T em voo  I alinhar  C vista  F1 MCDU",
                     8, 8, HINT, Align.LEFT);
         }
     }
