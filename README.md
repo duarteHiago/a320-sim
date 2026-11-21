@@ -1,10 +1,12 @@
-# A320 SIM
+# SICA
 
-Simulador de A320 com estética de console retrô. As "caixas pretas" do avião são carregadas por **cartuchos** (cartões SD), e o instrutor monta o avião escolhendo quais cartuchos encaixar.
+**Simulador Integrado de Configuração Aeronáutica**
+
+Simulador de jato bimotor com estética de console retrô. As "caixas pretas" do avião são carregadas por **cartuchos** (cartões SD), e o instrutor monta o avião escolhendo quais cartuchos encaixar.
 
 ![Vista pela janela na cabeceira da pista 15 de Viracopos](docs/img/janela-pista.png)
 
-| Monte seu A320 | Em voo pela janela |
+| Monte sua aeronave | Em voo pela janela |
 |---|---|
 | ![Tela de montagem do rack com três cartuchos](docs/img/rack.png) | ![Vista pela janela a 8000 pés com HUD](docs/img/janela-voo.png) |
 | **Painel neo (LCD), em voo** | **Painel ceo (CRT), sensores alinhando** |
@@ -68,7 +70,7 @@ Repita para `PLT-A320-NEO`, `PRP-A320-CEO`, `PRP-A320-NEO`, `CKP-A320-CEO` e `CK
 
 **Usando:**
 
-- Na tela **MONTE SEU A320**, encaixar um cartão no leitor coloca ele direto no slot do grupo dele; tirar o cartão esvazia o slot. As setas continuam funcionando quando há mais de um cartão do mesmo grupo plugado.
+- Na tela **MONTE SUA AERONAVE**, encaixar um cartão no leitor coloca ele direto no slot do grupo dele; tirar o cartão esvazia o slot. As setas continuam funcionando quando há mais de um cartão do mesmo grupo plugado.
 - **Com o avião ligado**, tirar um cartão desliga as caixas dele na hora (ex.: sem o COCKPIT as telas apagam e os alarmes somem) e aparece **CARTUCHO REMOVIDO** no cockpit e no log do instrutor. Encaixar de volta (em qualquer leitor) faz o *data loading* e as caixas religam com self-test; os sensores precisam alinhar de novo. Cartão incompatível (ex.: COCKPIT ceo com PROPULSAO neo) é recusado.
 - O `.jar` é copiado para `cache/` antes de carregar, então o Windows não trava o arquivo no cartão.
 
