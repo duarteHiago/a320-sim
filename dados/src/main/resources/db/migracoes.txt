@@ -2,3 +2,4 @@
 V1__schema.sql
 V2__seed.sql
 V3__pistas_gru_cgh.sql
+V4__plano_de_voo.sql

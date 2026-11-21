@@ -1,6 +1,7 @@
 package br.a320sim.dados.servico;
 
 import br.a320sim.dados.modelo.EventoSessao;
+import br.a320sim.dados.modelo.PlanoVoo;
 import br.a320sim.dados.modelo.Sessao;
 import br.a320sim.dados.repositorio.SessaoRepositorio;
 
@@ -51,6 +52,11 @@ public class SessaoServico {
                 .map(e -> e.descricao().length() <= DESCRICAO_MAX ? e
                         : new EventoSessao(e.tempoS(), e.descricao().substring(0, DESCRICAO_MAX)))
                 .toList());
+    }
+
+    /** O plano de voo que o aluno inseriu (o último vale). */
+    public void registrarPlano(long id, PlanoVoo plano) {
+        repositorio.registrarPlano(id, plano);
     }
 
     public void fechar(long id, double duracaoS, boolean crash, String cartuchos) {

@@ -51,6 +51,8 @@ public final class SessoesAdapter implements CrudAdapter<Sessao> {
                 "DURACAO|" + (s.duracaoS() == null ? "-" : tempo(s.duracaoS()) + " (simulada)")
                         + (s.crash() ? "   CRASH" : ""),
                 "CARTUCHOS|" + (s.cartuchos() == null || s.cartuchos().isBlank() ? "-" : s.cartuchos()),
+                "PLANO|" + (s.plano() == null ? "(sem plano de voo)" : s.plano().resumo()),
+                "V1/VR/V2|" + (s.plano() == null ? "-" : s.plano().velocidades()),
                 "NOTA|" + (s.nota() == null ? "(nao avaliada)" : String.format("%.1f", s.nota())),
                 "OBS|" + (s.observacao() == null ? "-" : s.observacao()),
                 ""));

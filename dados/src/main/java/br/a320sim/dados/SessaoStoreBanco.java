@@ -1,8 +1,10 @@
 package br.a320sim.dados;
 
 import br.a320sim.dados.modelo.EventoSessao;
+import br.a320sim.dados.modelo.PlanoVoo;
 import br.a320sim.dados.servico.SessaoServico;
 import br.a320sim.host.Host;
+import br.a320sim.host.plan.FlightPlan;
 import br.a320sim.host.session.SessionStore;
 
 import java.util.List;
@@ -27,6 +29,12 @@ public class SessaoStoreBanco implements SessionStore {
         sessoes.registrarEventos(sessaoId, events.stream()
                 .map(e -> new EventoSessao(e.simTime(), e.description()))
                 .toList());
+    }
+
+    @Override
+    public void savePlan(FlightPlan p) {
+        sessoes.registrarPlano(sessaoId, new PlanoVoo(p.origin(), p.destination(), p.runway(), p.cruiseFl(),
+                p.zfwKg(), p.fuelKg(), p.v1(), p.vr(), p.v2()));
     }
 
     @Override

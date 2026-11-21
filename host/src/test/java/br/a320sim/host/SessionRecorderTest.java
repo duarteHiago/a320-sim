@@ -1,5 +1,6 @@
 package br.a320sim.host;
 
+import br.a320sim.host.plan.FlightPlan;
 import br.a320sim.core.bus.Labels;
 import br.a320sim.host.cartridge.CartridgeLibrary;
 import br.a320sim.host.cartridge.CartridgeLoader;
@@ -113,5 +114,36 @@ class SessionRecorderTest {
         store.failing = false;
         recorder.update(1.0);
         assertEquals(List.of(List.of("Mensagem: um", "Mensagem: dois")), store.batches);
+    }
+
+    @Test
+    void planoDeVooVaiParaOStoreUmaVezPorMudanca() {
+        List<FlightPlan> plans = new ArrayList<>();
+        SessionStore store = new SessionStore() {
+            @Override
+            public void appendEvents(List<Host.LoggedCommand> events) {
+            }
+
+            @Override
+            public void savePlan(FlightPlan plan) {
+                plans.add(plan);
+            }
+
+            @Override
+            public void close(double simSeconds, boolean crashed, List<String> cartridges) {
+            }
+        };
+        SessionRecorder recorder = new SessionRecorder(host, store);
+        FlightPlan plan = new FlightPlan("SBKP", "SBGR", "10L", 100, 60_000, 8_000, 140, 143, 148);
+        plan.publish(host.bus());
+        host.advance(0.1);
+        recorder.update(0.1);
+        recorder.update(0.1);
+        assertEquals(List.of(plan), plans);
+        FlightPlan changed = new FlightPlan("SBKP", "SBGR", "28R", 100, 60_000, 8_000, 140, 143, 148);
+        changed.publish(host.bus());
+        host.advance(0.1);
+        recorder.update(0.1);
+        assertEquals(List.of(plan, changed), plans);
     }
 }

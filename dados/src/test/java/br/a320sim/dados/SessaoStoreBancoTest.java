@@ -1,5 +1,8 @@
 package br.a320sim.dados;
 
+import static org.junit.jupiter.api.Assertions.assertNull;
+import br.a320sim.host.plan.FlightPlan;
+import br.a320sim.dados.modelo.PlanoVoo;
 import br.a320sim.dados.modelo.EventoSessao;
 import br.a320sim.dados.modelo.Sessao;
 import br.a320sim.host.Host;
@@ -47,5 +50,23 @@ class SessaoStoreBancoTest {
         List<EventoSessao> eventos = dados.sessoes().eventos(id);
         assertEquals(2, eventos.size());
         assertEquals(30, eventos.get(1).tempoS(), Host.TICK_SECONDS);
+    }
+
+    @Test
+    void planoDeVooFicaGravadoNaSessao() {
+        Host host = new Host();
+        long aluno = dados.pessoas().listar().get(0).id();
+        long id = dados.sessoes().abrir(aluno, null, Sessao.SOLO, null, "");
+        SessionRecorder gravador = new SessionRecorder(host, new SessaoStoreBanco(dados.sessoes(), id));
+        assertNull(dados.sessoes().buscar(id).orElseThrow().plano(), "comeca sem plano");
+
+        new FlightPlan("SBKP", "SBSP", "17R", 120, 58_000, 6_000, 135, 139, 144).publish(host.bus());
+        host.advance(0.1);
+        gravador.update(0.1);
+        gravador.close();
+
+        PlanoVoo plano = dados.sessoes().buscar(id).orElseThrow().plano();
+        assertEquals("SBKP > SBSP 17R FL120 TOW 64000", plano.resumo());
+        assertEquals("135/139/144", plano.velocidades());
     }
 }

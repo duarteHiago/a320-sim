@@ -2,6 +2,7 @@ package br.a320sim.host.session;
 
 import br.a320sim.core.bus.Labels;
 import br.a320sim.host.Host;
+import br.a320sim.host.plan.FlightPlan;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -25,6 +26,7 @@ public class SessionRecorder {
     private double sinceFlush;
     private boolean crashed;
     private boolean closed;
+    private FlightPlan savedPlan;
 
     public SessionRecorder(Host host, SessionStore store) {
         this.host = host;
@@ -64,10 +66,21 @@ public class SessionRecorder {
         return closed;
     }
 
-    /** Crash e cartuchos usados são acumulados: um reset ou um cartão arrancado não apagam o histórico. */
+    /**
+     * Crash e cartuchos usados são acumulados: um reset ou um cartão arrancado não apagam o histórico.
+     * Plano de voo novo ou alterado é gravado na hora.
+     */
     private void observe() {
         crashed |= host.bus().getBoolean(Labels.SIM_CRASHED);
         host.rack().slots().values().forEach(c -> cartridges.add(c.manifest().partNumber()));
+        host.plan().plan().filter(p -> !p.equals(savedPlan)).ifPresent(p -> {
+            try {
+                store.savePlan(p);
+                savedPlan = p;
+            } catch (RuntimeException e) {
+                System.err.println("[SESSAO] plano de voo nao gravado (tento de novo): " + e.getMessage());
+            }
+        });
     }
 
     private void flush() {

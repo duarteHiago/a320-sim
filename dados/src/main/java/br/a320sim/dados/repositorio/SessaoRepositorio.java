@@ -2,6 +2,7 @@ package br.a320sim.dados.repositorio;
 
 import br.a320sim.dados.DadosException;
 import br.a320sim.dados.modelo.EventoSessao;
+import br.a320sim.dados.modelo.PlanoVoo;
 import br.a320sim.dados.modelo.Sessao;
 
 import java.sql.Connection;
@@ -98,6 +99,27 @@ public class SessaoRepositorio {
         }
     }
 
+    /** Grava (ou troca) o plano de voo da sessão. */
+    public void registrarPlano(long id, PlanoVoo p) {
+        String sql = "UPDATE sessao SET plano_origem = ?, plano_destino = ?, plano_pista = ?, plano_fl = ?, "
+                + "plano_zfw_kg = ?, plano_combustivel_kg = ?, plano_v1 = ?, plano_vr = ?, plano_v2 = ? WHERE id = ?";
+        try (PreparedStatement ps = conexao.prepareStatement(sql)) {
+            ps.setString(1, p.origem());
+            ps.setString(2, p.destino());
+            ps.setString(3, p.pista());
+            ps.setInt(4, p.fl());
+            ps.setInt(5, p.zfwKg());
+            ps.setInt(6, p.combustivelKg());
+            ps.setInt(7, p.v1());
+            ps.setInt(8, p.vr());
+            ps.setInt(9, p.v2());
+            ps.setLong(10, id);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new DadosException("Erro ao gravar o plano de voo", e);
+        }
+    }
+
     /** Os eventos vão junto (ON DELETE CASCADE). */
     public void excluir(long id) {
         try (PreparedStatement ps = conexao.prepareStatement("DELETE FROM sessao WHERE id = ?")) {
@@ -148,6 +170,16 @@ public class SessaoRepositorio {
                 Jdbc.longo(rs, "instrutor_id"), rs.getString("instrutor_nome"), rs.getString("modo"),
                 Jdbc.longo(rs, "posicao_id"), rs.getString("posicao_nome"), rs.getString("cartuchos"),
                 Jdbc.instante(rs, "inicio"), Jdbc.instante(rs, "fim"), Jdbc.decimal(rs, "duracao_s"),
-                rs.getBoolean("crash"), Jdbc.decimal(rs, "nota"), rs.getString("observacao"));
+                rs.getBoolean("crash"), Jdbc.decimal(rs, "nota"), rs.getString("observacao"), plano(rs));
+    }
+
+    private static PlanoVoo plano(ResultSet rs) throws SQLException {
+        String origem = rs.getString("plano_origem");
+        if (origem == null) {
+            return null;
+        }
+        return new PlanoVoo(origem.strip(), rs.getString("plano_destino").strip(), rs.getString("plano_pista"),
+                rs.getInt("plano_fl"), rs.getInt("plano_zfw_kg"), rs.getInt("plano_combustivel_kg"),
+                rs.getInt("plano_v1"), rs.getInt("plano_vr"), rs.getInt("plano_v2"));
     }
 }
