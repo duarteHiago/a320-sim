@@ -125,6 +125,25 @@ public final class NdDisplay implements CockpitDisplay {
         d.text(String.valueOf(Math.round(bus.getDouble(Labels.IR_GS, 0))), x + 28, y + size - 12, t.green(),
                 Align.LEFT);
         d.text(Math.round(RANGE_NM) + " NM", x + size - 6, y + 10, t.cyan(), Align.RIGHT);
+        wind(d, bus, t, hdg, x + 6, y + size - 26);
+    }
+
+    /** Vento como no A320: "238/15" e uma seta apontando para onde ele sopra, relativa à proa. */
+    private void wind(Draw d, DataBus bus, Theme t, double hdg, float x, float y) {
+        double speed = bus.getDouble(Labels.SIM_WIND_SPD, 0);
+        if (speed < 1) {
+            return;
+        }
+        double from = bus.getDouble(Labels.SIM_WIND_DIR, 0);
+        d.text(String.format("%03d/%d", Math.round(from) % 360, Math.round(speed)), x, y, t.white(), Align.LEFT);
+        double toward = Math.toRadians(from + 180 - hdg);
+        float ax = x + 8;
+        float ay = y - 16;
+        float dx = (float) Math.sin(toward) * 6;
+        float dy = (float) Math.cos(toward) * 6;
+        d.line(ax - dx, ay - dy, ax + dx, ay + dy, t.green());
+        d.triangle(ax + dx * 1.4f, ay + dy * 1.4f, ax + dx * 0.6f - dy * 0.5f, ay + dy * 0.6f + dx * 0.5f,
+                ax + dx * 0.6f + dy * 0.5f, ay + dy * 0.6f - dx * 0.5f, t.green());
     }
 
     private static float[] toScreen(double dxNm, double dyNm, double hdg, float cx, float cy) {

@@ -5,11 +5,18 @@ import br.a320sim.core.bus.Labels;
 import br.a320sim.flightmodel.world.Runway;
 import br.a320sim.flightmodel.world.World;
 
+import java.util.Random;
+
 /**
  * Física "arcade-realista" do A320: sustentação, arrasto, empuxo e peso.
  * A atitude (pitch/bank) segue diretamente as taxas comandadas pelo fly-by-wire;
  * a trajetória e a velocidade saem do balanço de forças.
- * Lê do barramento: comandos do ELAC, N1 dos motores e alavancas. Publica TRUE.* e SIM.*.
+ * Lê do barramento: comandos do ELAC, N1 dos motores e alavancas, vento e turbulência. Publica TRUE.* e SIM.*.
+ * <p>
+ * Vento: no ar, {@code v} é a velocidade em relação ao ar, e o ar inteiro se move com o vento (o avião deriva);
+ * no chão, {@code v} é a velocidade sobre a pista, e o vento de proa soma na velocidade do ar.
+ * Turbulência: rajadas aleatórias (sobe/desce, rola e variação de velocidade), sorteadas com semente fixa
+ * para os testes darem sempre o mesmo resultado.
  */
 public class FlightModel {
 
@@ -41,6 +48,16 @@ public class FlightModel {
     private static final double MAX_GROUND_PITCH = 12;
     private static final double STEERING_RATE = 8;
 
+    /**
+     * Por nível de turbulência (0 a 3): rajada vertical (m/s), desvio de inclinação (°) e rajada de velocidade (m/s).
+     * O desvio de inclinação volta sozinho para zero (o fly-by-wire segura a atitude): o avião balança, não deita.
+     */
+    private static final double[] GUST_VERTICAL = {0, 0.8, 2.0, 3.5};
+    private static final double[] GUST_ROLL = {0, 2.0, 5.0, 9.0};
+    private static final double[] GUST_ALONG = {0, 0.8, 2.0, 3.5};
+    /** Quanto tempo uma rajada "dura" (s): define se a turbulência é picada ou ondulada. */
+    private static final double GUST_TIME = 1.2;
+
     private final DataBus bus;
 
     private double x;
@@ -58,8 +75,23 @@ public class FlightModel {
     private boolean onGround;
     private boolean crashed;
 
+    private final Random turbulence;
+    private double gustVertical;
+    /** Desvio de inclinação (°) causado pela turbulência; a cada passo entra só a variação dele. */
+    private double gustRoll;
+    private double rollDisturbance;
+    private double gustAlong;
+    private double windX;
+    private double windY;
+
     public FlightModel(DataBus bus) {
+        this(bus, 1);
+    }
+
+    /** @param seed semente das rajadas de turbulência */
+    public FlightModel(DataBus bus, long seed) {
         this.bus = bus;
+        this.turbulence = new Random(seed);
         resetOnRunway();
     }
 
@@ -81,6 +113,9 @@ public class FlightModel {
         heading = runway.headingDeg();
         onGround = true;
         crashed = false;
+        gustVertical = 0;
+        gustRoll = 0;
+        gustAlong = 0;
         publish();
     }
 
@@ -116,6 +151,13 @@ public class FlightModel {
             publish();
             return;
         }
+        readWind();
+        updateGusts(dt);
+        double hdg = Math.toRadians(heading);
+        // Vento de proa (positivo) ou de cauda (negativo)
+        double headwind = -(windX * Math.sin(hdg) + windY * Math.cos(hdg));
+        double airspeed = airspeed(headwind);
+
         int flaps = (int) clamp(bus.getDouble(Labels.CTL_FLAPS, 0), 0, FLAP_CL.length - 1);
         boolean gearDown = !bus.has(Labels.CTL_GEAR_DOWN) || bus.getBoolean(Labels.CTL_GEAR_DOWN);
         double pitchRate = bus.getDouble(Labels.FCTL_PITCH_RATE, 0);
@@ -124,7 +166,7 @@ public class FlightModel {
         double rho = density();
         double n1 = (bus.getDouble(Labels.ENG1_N1, 0) + bus.getDouble(Labels.ENG2_N1, 0)) / 2;
         double thrust = 2 * MAX_THRUST_PER_ENGINE * thrustFraction(n1) * Math.pow(rho / 1.225, 0.75);
-        double q = 0.5 * rho * v * v;
+        double q = 0.5 * rho * airspeed * airspeed;
         aoa = onGround ? pitch : pitch - Math.toDegrees(gamma);
         double cl = liftCoefficient(aoa, flaps);
         double cd = CD0 + FLAP_CD[flaps] + (gearDown ? GEAR_CD : 0) + INDUCED_K * cl * cl;
@@ -133,14 +175,24 @@ public class FlightModel {
         double weight = MASS * G;
 
         if (onGround) {
-            stepGround(dt, pitchRate, thrust, drag, lift, weight);
+            stepGround(dt, airspeed, pitchRate, thrust, drag, lift, weight);
+            if (!onGround) {
+                v += headwind; // decolou: a partir de agora v é a velocidade em relação ao ar
+            }
         } else {
             stepAir(dt, pitchRate, rollRate, thrust, drag, lift, weight, gearDown);
+            if (onGround && !crashed) {
+                v = Math.max(0, v - headwind); // tocou: volta a ser a velocidade sobre a pista
+            }
         }
 
-        double hdg = Math.toRadians(heading);
+        hdg = Math.toRadians(heading);
         x += v * Math.cos(gamma) * Math.sin(hdg) * dt;
         y += v * Math.cos(gamma) * Math.cos(hdg) * dt;
+        if (!onGround) {
+            x += windX * dt; // no ar, o vento leva o avião junto
+            y += windY * dt;
+        }
         ground = terrain();
         if (onGround) {
             alt = ground; // rodando no chão, acompanha o terreno
@@ -148,10 +200,11 @@ public class FlightModel {
         publish();
     }
 
-    private void stepGround(double dt, double pitchRate, double thrust, double drag, double lift, double weight) {
+    private void stepGround(double dt, double airspeed, double pitchRate, double thrust, double drag, double lift,
+                            double weight) {
         bank = 0;
         gamma = 0;
-        double ias = v / KT;
+        double ias = airspeed / KT;
         pitch = clamp(pitch + (pitchRate - 1.5) * dt, 0, MAX_GROUND_PITCH);
         if (ias < MIN_ROTATION_KT) {
             pitch = Math.max(0, pitch - 4 * dt);
@@ -171,14 +224,14 @@ public class FlightModel {
     private void stepAir(double dt, double pitchRate, double rollRate, double thrust, double drag,
                          double lift, double weight, boolean gearDown) {
         pitch = clamp(pitch + pitchRate * dt, -90, 90);
-        bank = wrap180(bank + rollRate * dt);
+        bank = wrap180(bank + rollRate * dt + rollDisturbance);
 
         v = Math.max(15, v + ((thrust - drag) / MASS - G * Math.sin(gamma)) * dt);
         double gammaRate = (lift * Math.cos(Math.toRadians(bank)) - weight * Math.cos(gamma)) / (MASS * v);
         gamma = clamp(gamma + gammaRate * dt, -1.4, 1.4);
         double turnBank = Math.toRadians(clamp(bank, -80, 80));
         heading = wrap360(heading + Math.toDegrees(G * Math.tan(turnBank) / v) * dt);
-        alt += v * Math.sin(gamma) * dt;
+        alt += (v * Math.sin(gamma) + gustVertical) * dt;
 
         if (alt <= ground) {
             touchdown(gearDown);
@@ -196,6 +249,40 @@ public class FlightModel {
         if (crashed) {
             v = 0;
         }
+    }
+
+    /** Vento do barramento, como o vetor (m/s) para onde o ar está indo. */
+    private void readWind() {
+        double speed = bus.getDouble(Labels.SIM_WIND_SPD, 0) * KT;
+        double from = Math.toRadians(bus.getDouble(Labels.SIM_WIND_DIR, 0));
+        windX = -Math.sin(from) * speed;
+        windY = -Math.cos(from) * speed;
+    }
+
+    /**
+     * Rajadas: cada uma é um ruído "com memória" (processo de Ornstein-Uhlenbeck) que oscila em torno de zero
+     * com a intensidade do nível de turbulência. No chão, elas somem.
+     */
+    private void updateGusts(double dt) {
+        int level = (int) clamp(bus.getDouble(Labels.SIM_TURBULENCE, 0), 0, GUST_VERTICAL.length - 1);
+        if (onGround) {
+            level = 0;
+        }
+        gustVertical = gust(gustVertical, GUST_VERTICAL[level], dt);
+        double previousRoll = gustRoll;
+        gustRoll = gust(gustRoll, GUST_ROLL[level], dt);
+        rollDisturbance = gustRoll - previousRoll;
+        gustAlong = gust(gustAlong, GUST_ALONG[level], dt);
+    }
+
+    private double gust(double current, double sigma, double dt) {
+        double noise = sigma == 0 ? 0 : sigma * Math.sqrt(2 * dt / GUST_TIME) * turbulence.nextGaussian();
+        return current - current / GUST_TIME * dt + noise;
+    }
+
+    /** Velocidade em relação ao ar (m/s): no chão soma o vento de proa; as rajadas de frente somam sempre. */
+    private double airspeed(double headwind) {
+        return Math.max(0, (onGround ? v + headwind : v) + gustAlong);
     }
 
     /** Terreno embaixo da posição atual, em metros. */
@@ -231,16 +318,17 @@ public class FlightModel {
     }
 
     private void publish() {
-        double ias = v / KT * Math.sqrt(density() / 1.225);
+        double hdg = Math.toRadians(heading);
+        double ias = airspeed(-(windX * Math.sin(hdg) + windY * Math.cos(hdg))) / KT * Math.sqrt(density() / 1.225);
         bus.publish(Labels.TRUE_IAS, ias);
         bus.publish(Labels.TRUE_ALT, alt / FT);
-        bus.publish(Labels.TRUE_VS, v * Math.sin(gamma) / FT * 60);
+        bus.publish(Labels.TRUE_VS, (v * Math.sin(gamma) + gustVertical) / FT * 60);
         bus.publish(Labels.TRUE_PITCH, pitch);
         bus.publish(Labels.TRUE_ROLL, bank);
         bus.publish(Labels.TRUE_HDG, heading);
         bus.publish(Labels.TRUE_FPA, Math.toDegrees(gamma));
         bus.publish(Labels.TRUE_AOA, aoa);
-        bus.publish(Labels.TRUE_GS, v * Math.cos(gamma) / KT);
+        bus.publish(Labels.TRUE_GS, groundSpeed() / KT);
         bus.publish(Labels.TRUE_POS_X, x / NM);
         bus.publish(Labels.TRUE_POS_Y, y / NM);
         bus.publish(Labels.SIM_ON_GROUND, onGround);
@@ -248,7 +336,17 @@ public class FlightModel {
         bus.publish(Labels.SIM_CRASHED, crashed);
     }
 
-    private static double clamp(double value, double min, double max) {
+    /** Velocidade sobre o chão (m/s): no ar, a do avião em relação ao ar mais o vento. */
+    private double groundSpeed() {
+        if (onGround) {
+            return v;
+        }
+        double hdg = Math.toRadians(heading);
+        double horizontal = v * Math.cos(gamma);
+        return Math.hypot(horizontal * Math.sin(hdg) + windX, horizontal * Math.cos(hdg) + windY);
+    }
+
+        private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
 

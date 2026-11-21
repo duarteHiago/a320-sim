@@ -23,6 +23,8 @@ import br.a320sim.dados.BancoLocal;
 import br.a320sim.dados.Dados;
 import br.a320sim.dados.modelo.Sessao;
 import br.a320sim.host.Host;
+import br.a320sim.host.command.SetWeatherCommand;
+import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.host.cartridge.AutoReader;
 import br.a320sim.host.cartridge.CartridgeLibrary;
 import br.a320sim.host.cartridge.CartridgeLoader;
@@ -170,6 +172,11 @@ public class SimApp extends Game {
     /** Depois do boot: o instrutor vai para a estação dele, no SOLO o próprio aluno pilota. */
     public void afterBoot() {
         sessions.start(plan, mode == Mode.INSTRUCTOR ? Sessao.INSTRUTOR : Sessao.SOLO);
+        // Atalho de teste: -Dsim.vento=1 (TRAVES 15 KT) ou 2 (FORTE 30 KT), relativo à pista de destino
+        String wind = System.getProperty("sim.vento", "");
+        if (wind.matches("[0-2]")) {
+            host.execute(SetWeatherCommand.presets(Windshield.destination(host.bus())).get(Integer.parseInt(wind)));
+        }
         if (mode == Mode.INSTRUCTOR) {
             setScreen(new IosScreen(this));
         } else {

@@ -197,7 +197,7 @@ public final class Windshield implements Disposable {
         d.text(String.format("%s  %.1f NM", target.id(), nm), x, y, HUD, Align.CENTER);
     }
 
-    static Runway destination(DataBus bus) {
+    public static Runway destination(DataBus bus) {
         String[] parts = bus.getString(Labels.SIM_DEST_RUNWAY, "").split(" ");
         return parts.length == 2 ? World.runway(parts[0], parts[1]).orElse(World.HOME) : World.HOME;
     }

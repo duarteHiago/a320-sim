@@ -5,6 +5,7 @@ import br.a320sim.cockpit.gfx.Draw;
 import br.a320sim.cockpit.gfx.Draw.Align;
 import br.a320sim.cockpit.gfx.RetroButton;
 import br.a320sim.cockpit.gfx.TextInput;
+import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
 import br.a320sim.flightmodel.world.Airport;
@@ -18,6 +19,7 @@ import br.a320sim.host.command.ApplyPositionCommand;
 import br.a320sim.host.command.FreezeCommand;
 import br.a320sim.host.command.InstantAlignCommand;
 import br.a320sim.host.command.ResetToRunwayCommand;
+import br.a320sim.host.command.SetWeatherCommand;
 import br.a320sim.host.command.SendMessageCommand;
 import br.a320sim.host.command.ToggleFailureCommand;
 import br.a320sim.host.failure.AutopilotFailure;
@@ -73,6 +75,8 @@ public class IosScreen extends RetroScreen {
     private final List<Posicao> positions = new ArrayList<>();
     private final boolean hasDatabase;
     private int position;
+    /** Vento atual, escolhido entre as predefinições do botão VENTO. */
+    private SetWeatherCommand weather = SetWeatherCommand.CALM;
     private float snapshotTimer;
     private double trailTimer;
     private float time;
@@ -82,12 +86,20 @@ public class IosScreen extends RetroScreen {
         Host host = app.host();
         addresses = SimServer.localAddresses().stream().limit(2).collect(Collectors.joining("  "));
 
-        float y = 160;
+        float y = 172;
         for (Failure failure : new Failure[]{new EngineFailure(1), new SensorFailure(), new AutopilotFailure()}) {
-            buttons.add(new RetroButton(338, y, 296, 22, failure::name, () -> host.hasFailure(failure), RED,
+            buttons.add(new RetroButton(338, y, 296, 20, failure::name, () -> host.hasFailure(failure), RED,
                     () -> host.execute(new ToggleFailureCommand(failure))));
-            y -= 28;
+            y -= 24;
         }
+        // Ambiente: vento (as predefinições valem para a pista de destino); começa com o que já está valendo
+        DataBus bus = host.bus();
+        weather = SetWeatherCommand.presets(Windshield.destination(bus)).stream()
+                .filter(w -> w.speedKt() == bus.getDouble(Labels.SIM_WIND_SPD, 0)
+                        && w.fromDeg() == bus.getDouble(Labels.SIM_WIND_DIR, 0))
+                .findFirst().orElse(SetWeatherCommand.CALM);
+        buttons.add(new RetroButton(338, 98, 140, 20, () -> "VENTO: " + weather.name(),
+                () -> weather.speedKt() > 0, AMBER, this::nextWeather));
 
         hasDatabase = loadPositions();
         buttons.add(new RetroButton(6, 34, 100, 22,
@@ -121,6 +133,15 @@ public class IosScreen extends RetroScreen {
             }
         }
         return true;
+    }
+
+    /** Próxima predefinição de vento, calculada para a pista de destino de agora. */
+    private void nextWeather() {
+        Host host = app.host();
+        List<SetWeatherCommand> presets = SetWeatherCommand.presets(Windshield.destination(host.bus()));
+        int current = presets.stream().map(SetWeatherCommand::name).toList().indexOf(weather.name());
+        weather = presets.get((current + 1) % presets.size());
+        host.execute(weather);
     }
 
     private String positionLabel() {
@@ -238,7 +259,7 @@ public class IosScreen extends RetroScreen {
         header(d);
         map(d, bus);
         mirror(d, bus);
-        d.text("FALHAS  (clique para ligar/desligar)", 338, 194, GREY, Align.LEFT);
+        d.text("FALHAS  (clique para ligar/desligar)", 338, 198, GREY, Align.LEFT);
         for (RetroButton button : buttons) {
             button.draw(d, mouse);
         }
@@ -344,7 +365,7 @@ public class IosScreen extends RetroScreen {
 
     private void log(Draw d) {
         List<Host.LoggedCommand> entries = app.host().log();
-        float y = 92;
+        float y = 84;
         for (int i = Math.max(0, entries.size() - 2); i < entries.size(); i++) {
             Host.LoggedCommand entry = entries.get(i);
             int seconds = (int) entry.simTime();

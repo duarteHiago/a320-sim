@@ -23,6 +23,10 @@ public final class Labels {
     public static final String SIM_ON_GROUND = "SIM.ON_GROUND";
     public static final String SIM_RADIO_ALT = "SIM.RADIO_ALT";
     public static final String SIM_CRASHED = "SIM.CRASHED";
+    /** Vento: de onde ele sopra (graus), velocidade (kt) e turbulência de 0 (nenhuma) a 3 (forte). */
+    public static final String SIM_WIND_DIR = "SIM.WIND_DIR";
+    public static final String SIM_WIND_SPD = "SIM.WIND_SPD";
+    public static final String SIM_TURBULENCE = "SIM.TURBULENCE";
     /** Pista de destino da sessão, ex.: "SBGR 10L" (HUD e ND mostram a distância até ela). */
     public static final String SIM_DEST_RUNWAY = "SIM.DEST_RUNWAY";
     public static final String SIM_TIME = "SIM.TIME";

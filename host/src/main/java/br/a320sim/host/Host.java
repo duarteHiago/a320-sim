@@ -73,6 +73,9 @@ public class Host {
             pending = 0;
             failures.clear();
             log.clear();
+            bus.publish(Labels.SIM_WIND_DIR, 0.0); // cada sessão começa sem vento
+            bus.publish(Labels.SIM_WIND_SPD, 0.0);
+            bus.publish(Labels.SIM_TURBULENCE, 0.0);
             bus.publish(Labels.SIM_FREEZE, false);
             flightModel.resetOnRunway();
             flightEvents.resync(bus);
