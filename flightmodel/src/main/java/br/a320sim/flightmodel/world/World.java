@@ -3,6 +3,7 @@ package br.a320sim.flightmodel.world;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Os aeroportos do simulador e o terreno entre eles.
@@ -29,6 +30,11 @@ public final class World {
             Airport.strip("SBSP", "17L", -23.6208, -46.6580, -23.6317, -46.6505, 1435, 45, 2631)));
 
     public static final List<Airport> AIRPORTS = List.of(SBKP, SBGR, SBSP);
+
+    /** Pistas físicas com pátio e terminal ao lado (do lado da taxiway). */
+    private static final Set<String> TERMINAL_RUNWAYS = Set.of("SBKP 15", "SBGR 10R", "SBSP 17R");
+    /** Pistas cuja taxiway fica à esquerda, para não cair entre as paralelas. */
+    private static final Set<String> TAXIWAY_ON_LEFT = Set.of("SBGR 10L", "SBSP 17L");
 
     /** Pista onde o avião começa quando nada é escolhido: SBKP 15. */
     public static final Runway HOME = SBKP.strips().get(0);
@@ -71,6 +77,16 @@ public final class World {
             weights += w;
         }
         return weighted / weights;
+    }
+
+    /** De que lado da pista física (olhando da cabeceira) fica a taxiway: +1 direita, -1 esquerda. */
+    public static int taxiwaySide(Runway strip) {
+        return TAXIWAY_ON_LEFT.contains(strip.id()) ? -1 : 1;
+    }
+
+    /** A pista física tem pátio, terminal e torre do lado da taxiway. */
+    public static boolean hasTerminal(Runway strip) {
+        return TERMINAL_RUNWAYS.contains(strip.id());
     }
 
     /** O aeroporto mais perto de um ponto. */

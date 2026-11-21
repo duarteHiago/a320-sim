@@ -13,7 +13,6 @@ import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Sistema visual: a vista pelo para-brisa, no estilo "Mode 7" dos consoles 16-bit, com alguns extras 3D.
@@ -51,15 +50,13 @@ public final class OutsideView implements Disposable {
     private static final double APRON_HALF_LENGTH = 450;
     private static final double APRON_ACROSS_MIN = 175;
     private static final double APRON_ACROSS_MAX = 330;
-    /** Área do aeroporto em volta da pista: grama além do asfalto. */
-    private static final double AREA_BEHIND = 260;
-    private static final double AREA_FRONT = 420;
+    /** Área do aeroporto em volta da pista (grama além do asfalto), até onde começam os prédios. */
+    private static final double AREA_BEHIND = Obstacles.CLEAR_BEHIND - 10;
+    private static final double AREA_FRONT = Obstacles.CLEAR_TERMINAL_SIDE - 10;
+    private static final double AREA_FRONT_NO_TERMINAL = Obstacles.CLEAR_TAXIWAY_SIDE - 10;
     private static final double AREA_ENDS = 150;
     private static final double PAPI_ALONG = 420;
-    /** Pistas com pátio e terminal; as outras só têm a taxiway (do lado de fora das paralelas). */
-    private static final Set<String> MAIN_RUNWAYS = Set.of("SBKP 15", "SBGR 10R", "SBSP 17R");
-    /** Pistas cuja taxiway fica à esquerda, para não cair entre as paralelas. */
-    private static final Set<String> TAXIWAY_ON_LEFT = Set.of("SBGR 10L", "SBSP 17L");
+
     private static final double[] PAPI_ANGLES = {3.5, 3.17, 2.83, 2.5}; // do mais perto da pista para fora
 
     /**
@@ -78,7 +75,7 @@ public final class OutsideView implements Disposable {
                 connectors[i] = 60 + (length - 120) * i / (count - 1);
             }
             return new Strip(r.id(), r.xNm() * NM, r.yNm() * NM, Math.sin(h), Math.cos(h), length, r.widthM() / 2,
-                    TAXIWAY_ON_LEFT.contains(r.id()) ? -1 : 1, MAIN_RUNWAYS.contains(r.id()), connectors);
+                    World.taxiwaySide(r), World.hasTerminal(r), connectors);
         }
 
         double along(double x, double y) {
@@ -99,7 +96,8 @@ public final class OutsideView implements Disposable {
 
         /** Dentro da área do aeroporto desta pista (grama, taxiway, pátio). */
         boolean inArea(double along, double across) {
-            return along > -AREA_ENDS && along < length + AREA_ENDS && across > -AREA_BEHIND && across < AREA_FRONT;
+            return along > -AREA_ENDS && along < length + AREA_ENDS && across > -AREA_BEHIND
+                    && across < (main ? AREA_FRONT : AREA_FRONT_NO_TERMINAL);
         }
 
         double apronMin() {

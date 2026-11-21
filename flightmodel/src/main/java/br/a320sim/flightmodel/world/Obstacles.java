@@ -8,8 +8,9 @@ import java.util.Optional;
  * a vista pela janela desenha a partir daqui e o modelo de voo testa a colisão com os mesmos objetos.
  * <p>
  * Tudo em metros, no mesmo referencial do {@link World} (origem na cabeceira 15 de SBKP).
- * Perto das pistas, a altura dos prédios é limitada por uma rampa de 2° antes de cada cabeceira
- * (como as zonas de proteção de aeródromo), para a aproximação ficar livre.
+ * Perto das pistas, a altura dos prédios segue as zonas de proteção de aeródromo: uma faixa livre ao lado
+ * da pista (mais larga do lado do terminal), depois casas baixas subindo na proporção de 1 para 7
+ * (superfície de transição) e, antes de cada cabeceira, uma rampa de 2° para a aproximação ficar livre.
  */
 public final class Obstacles {
 
@@ -57,8 +58,15 @@ public final class Obstacles {
     /** Rampa de proteção antes de cada cabeceira: inclinação e alcance. */
     private static final double APPROACH_SLOPE = Math.tan(Math.toRadians(2));
     private static final double APPROACH_LENGTH = 6000;
-    /** Faixa em volta das pistas onde não há prédio nenhum. */
+    /** Faixa sem árvores em volta das pistas (as árvores não seguem a cidade até a cerca). */
     private static final double RUNWAY_CLEAR = 650;
+    /** Faixa sem prédios ao lado da pista (m do eixo): do lado sem taxiway, do lado da taxiway e do terminal. */
+    public static final double CLEAR_BEHIND = 280;
+    public static final double CLEAR_TAXIWAY_SIDE = 240;
+    public static final double CLEAR_TERMINAL_SIDE = 440;
+    /** Na beira da faixa livre só cabem casas; daí a altura sobe 1 m a cada 7 m de afastamento. */
+    private static final double EDGE_HEIGHT = 8;
+    private static final double TRANSITION = 1.0 / 7;
 
     private Obstacles() {
     }
@@ -132,18 +140,31 @@ public final class Obstacles {
     }
 
     /**
-     * Altura máxima de um prédio num ponto: zero perto das pistas e, antes de cada cabeceira, uma rampa de 2°
-     * que vai abrindo para os lados.
+     * Altura máxima de um prédio num ponto: zero na faixa livre ao lado das pistas, casas baixas subindo
+     * 1:7 depois dela e, antes de cada cabeceira, uma rampa de 2° que vai abrindo para os lados.
      */
     public static double heightLimit(double x, double y) {
         double limit = Double.MAX_VALUE;
         for (Airport airport : World.AIRPORTS) {
+            for (Runway strip : airport.strips()) {
+                double along = strip.alongNm(x / NM, y / NM) * NM;
+                if (along < -200 || along > strip.lengthM() + 200) {
+                    continue;
+                }
+                // Positivo para o lado da taxiway (e do terminal, quando houver)
+                double side = strip.acrossNm(x / NM, y / NM) * NM * World.taxiwaySide(strip);
+                double clear = side >= 0
+                        ? (World.hasTerminal(strip) ? CLEAR_TERMINAL_SIDE : CLEAR_TAXIWAY_SIDE)
+                        : CLEAR_BEHIND;
+                double beyond = Math.abs(side) - clear;
+                if (beyond < 0) {
+                    return 0;
+                }
+                limit = Math.min(limit, EDGE_HEIGHT + beyond * TRANSITION);
+            }
             for (Runway r : airport.runways()) {
                 double along = r.alongNm(x / NM, y / NM) * NM;
                 double across = Math.abs(r.acrossNm(x / NM, y / NM) * NM);
-                if (along >= -200 && along <= r.lengthM() + 200 && across < RUNWAY_CLEAR) {
-                    return 0;
-                }
                 double before = -along;
                 if (before > 0 && before < APPROACH_LENGTH && across < 150 + before * 0.15) {
                     limit = Math.min(limit, Math.max(0, before * APPROACH_SLOPE - 5));

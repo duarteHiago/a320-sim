@@ -144,4 +144,41 @@ class ObstaclesTest {
         assertEquals("", bus.getString(Labels.SIM_COLLISION, "x"), "reset limpa a colisao");
         assertFalse(model.isCrashed());
     }
+
+    /** Prédios de Congonhas cujo centro fica ao lado da 17R, entre {@code min} e {@code max} metros do eixo. */
+    private static java.util.List<Building> besideCgh(double min, double max) {
+        Runway r = World.runway("SBSP", "17R").orElseThrow();
+        City sp = city("Sao Paulo");
+        java.util.List<Building> found = new java.util.ArrayList<>();
+        double[] c = World.SBSP.center();
+        long cx = Math.floorDiv((long) (c[0] * NM), (long) sp.block());
+        long cy = Math.floorDiv((long) (c[1] * NM), (long) sp.block());
+        for (long bx = cx - 10; bx <= cx + 10; bx++) {
+            for (long by = cy - 10; by <= cy + 10; by++) {
+                Obstacles.building(sp, bx, by).ifPresent(b -> {
+                    double x = (b.x0() + b.x1()) / 2 / NM;
+                    double y = (b.y0() + b.y1()) / 2 / NM;
+                    double along = r.alongNm(x, y) * NM;
+                    double across = Math.abs(r.acrossNm(x, y) * NM);
+                    if (along > 0 && along < r.lengthM() && across >= min && across <= max) {
+                        found.add(b);
+                    }
+                });
+            }
+        }
+        return found;
+    }
+
+    @Test
+    void congonhasTemCasasPertoDaPistaComoNaCidadeDeVerdade() {
+        assertTrue(besideCgh(250, 600).size() >= 5, "a cidade chega perto da cerca");
+        assertTrue(besideCgh(0, 250).isEmpty(), "mas nao em cima da pista");
+    }
+
+    @Test
+    void pertoDaPistaSoCasasBaixasSubindoAosPoucos() {
+        for (Building b : besideCgh(250, 450)) {
+            assertTrue(b.height() <= 8 + 200 / 7.0 + 1, "superficie de transicao: " + b.height());
+        }
+    }
 }
