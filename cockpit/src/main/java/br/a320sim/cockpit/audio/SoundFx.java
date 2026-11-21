@@ -36,7 +36,7 @@ public final class SoundFx implements Disposable {
         try {
             opened = Gdx.audio.newAudioDevice(Synth.RATE, true);
         } catch (RuntimeException e) {
-            Gdx.app.error("A320SIM", "Sem dispositivo de áudio, seguindo em silêncio", e);
+            Gdx.app.error("SICA", "Sem dispositivo de áudio, seguindo em silêncio", e);
         }
         device = opened;
         worker = new Thread(this::loop, "sound-mixer");

@@ -11,7 +11,7 @@ public final class CockpitLauncher {
 
     public static void main(String[] args) {
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-        config.setTitle("A320 SIM");
+        config.setTitle("SICA");
         config.setWindowedMode(RetroScreen.WIDTH * 2, RetroScreen.HEIGHT * 2);
         config.setForegroundFPS(60);
         config.useVsync(true);

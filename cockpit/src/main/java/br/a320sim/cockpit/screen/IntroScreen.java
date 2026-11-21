@@ -9,7 +9,7 @@ import br.a320sim.cockpit.input.MenuInput;
 import com.badlogic.gdx.graphics.Color;
 
 /**
- * Abertura à moda dos consoles: o logo cai com um "whoosh", toca a vinheta, um A320 cruza a tela
+ * Abertura à moda dos consoles: o logo cai com um "whoosh", toca a vinheta, um jato cruza a tela
  * deixando a trilha e aparece "APERTE START". Qualquer tecla ou botão pula.
  */
 public class IntroScreen extends RetroScreen {
@@ -64,7 +64,7 @@ public class IntroScreen extends RetroScreen {
             d.rect(0, 0, WIDTH, HEIGHT, new Color(1, 1, 1, 0.6f * (1 - flash / 0.18f)));
         }
 
-        // A320 cruzando a tela com a trilha de condensação
+        // Jato cruzando a tela com a trilha de condensação
         float planeT = (time - 1.2f) / 2.2f;
         if (planeT > 0 && planeT < 1.4f) {
             float px = -60 + planeT * (WIDTH + 140);
@@ -76,6 +76,9 @@ public class IntroScreen extends RetroScreen {
             Sprites.airliner(d, px, py, 1.6f);
         }
 
+        if (time > LOGO_LAND) {
+            d.text("SIMULADOR INTEGRADO DE CONFIGURACAO AERONAUTICA", WIDTH / 2f, 166, GREY, Align.CENTER);
+        }
         if (time > 1.9f) {
             d.text("CARTRIDGE AVIONICS SYSTEM", WIDTH / 2f, 98, GREY, Align.CENTER);
             d.text("3 slots  -  6 cartuchos  -  instrutor e aluno", WIDTH / 2f, 82, DIM, Align.CENTER);
@@ -84,7 +87,7 @@ public class IntroScreen extends RetroScreen {
             d.text(MenuInput.hasController() ? "APERTE START" : "APERTE ENTER", WIDTH / 2f, 46, Color.WHITE,
                     Align.CENTER, 2);
         }
-        d.text("(c) 2026  A320 SIM", WIDTH / 2f, 12, DIM, Align.CENTER);
+        d.text("(c) 2026  SICA", WIDTH / 2f, 12, DIM, Align.CENTER);
     }
 
     @Override
