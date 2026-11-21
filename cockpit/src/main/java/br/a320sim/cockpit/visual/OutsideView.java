@@ -2,6 +2,7 @@ package br.a320sim.cockpit.visual;
 
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
+import br.a320sim.flightmodel.world.Obstacles;
 import br.a320sim.flightmodel.world.Runway;
 import br.a320sim.flightmodel.world.World;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -114,13 +115,9 @@ public final class OutsideView implements Disposable {
     /** Para não fazer conta de pista longe de qualquer aeroporto: raio de cada um, em metros. */
     private static final double AIRPORT_REACH = 4_500;
 
-    private static final double CITY_X = -9000;
-    private static final double CITY_Y = 7000;
-    private static final double CITY_RADIUS = 4000;
-    private static final double BLOCK = 160;
-    private static final double STREET = 22;
-    private static final double FIELD = 600;
-    private static final double ROAD_SPACING = 2400;
+    // Cidades, árvores e estradas vêm do gerador compartilhado com o modelo de voo (colisão)
+    private static final double FIELD = Obstacles.FIELD;
+    private static final double ROAD_SPACING = Obstacles.ROAD_SPACING;
 
     // Nuvens: camada de cúmulos esparsos, uns 4900 ft acima do aeródromo, levada pelo vento
     private static final double CLOUD_ALT = 1500;
@@ -387,12 +384,15 @@ public final class OutsideView implements Disposable {
         if (airport != 0) {
             return airport;
         }
-        if (Math.hypot(x - CITY_X, y - CITY_Y) < CITY_RADIUS) {
-            if (Math.floorMod((long) x, (long) BLOCK) < STREET || Math.floorMod((long) y, (long) BLOCK) < STREET) {
+        for (Obstacles.City city : Obstacles.CITIES) {
+            if (!city.contains(x, y, 0)) {
+                continue;
+            }
+            long block = (long) city.block();
+            if (Math.floorMod((long) x, block) < city.street() || Math.floorMod((long) y, block) < city.street()) {
                 return STREET_COLOR;
             }
-            return BUILDINGS[hash(Math.floorDiv((long) x, (long) BLOCK), Math.floorDiv((long) y, (long) BLOCK))
-                    % BUILDINGS.length];
+            return BUILDINGS[hash(Math.floorDiv((long) x, block), Math.floorDiv((long) y, block)) % BUILDINGS.length];
         }
         if (Math.floorMod((long) x, (long) ROAD_SPACING) < 14 || Math.floorMod((long) y, (long) ROAD_SPACING) < 14) {
             return ROAD;
@@ -525,48 +525,23 @@ public final class OutsideView implements Disposable {
     /** Árvores perto do avião: muitas nas divisas das plantações (cercas vivas), algumas soltas no meio. */
     private void trees() {
         double radius = 1800;
-        double cell = 55;
+        double cell = Obstacles.TREE_CELL;
         long minX = Math.floorDiv((long) (camX - radius), (long) cell);
         long maxX = Math.floorDiv((long) (camX + radius), (long) cell);
         long minY = Math.floorDiv((long) (camY - radius), (long) cell);
         long maxY = Math.floorDiv((long) (camY + radius), (long) cell);
         for (long cx = minX; cx <= maxX; cx++) {
             for (long cy = minY; cy <= maxY; cy++) {
-                int h = hash(cx * 31 + 7, cy * 17 + 3);
-                double x = cx * cell + (h % 37);
-                double y = cy * cell + ((h / 37) % 37);
                 // Frente da câmera apenas (barato descartar antes de qualquer outra conta)
-                if ((x - camX) * fx + (y - camY) * fy < 0) {
+                double ax = cx * cell + cell / 2;
+                double ay = cy * cell + cell / 2;
+                if ((ax - camX) * fx + (ay - camY) * fy < -cell) {
                     continue;
                 }
-                boolean hedge = Math.floorMod((long) x, (long) FIELD) < cell || Math.floorMod((long) y, (long) FIELD) < cell;
-                if (h % 100 >= (hedge ? 70 : 6) || !isFarmland(x, y)) {
-                    continue;
-                }
-                double height = 7 + (h % 9);
-                double halfWidth = 2.5 + (h % 4);
-                billboard(x, y, 0, height, halfWidth, TREES[(h / 7) % TREES.length]);
+                Obstacles.tree(cx, cy).ifPresent(t ->
+                        billboard(t.x(), t.y(), 0, t.height(), t.halfWidth(), TREES[t.variant() % TREES.length]));
             }
         }
-    }
-
-    private static boolean isFarmland(double x, double y) {
-        for (Strip s : STRIPS) {
-            double along = s.along(x, y);
-            double across = s.across(x, y);
-            if (along > -400 && along < s.length + 400 && across > -AREA_BEHIND - 130 && across < AREA_FRONT + 130) {
-                return false;
-            }
-            boolean beforeStart = along < 0 && along > -1200;
-            boolean afterEnd = along > s.length && along < s.length + 1200;
-            if ((beforeStart || afterEnd) && Math.abs(across) < 120) {
-                return false; // área livre das luzes de aproximação, nos dois sentidos
-            }
-        }
-        if (Math.hypot(x - CITY_X, y - CITY_Y) < CITY_RADIUS + 100) {
-            return false;
-        }
-        return Math.floorMod((long) x, (long) ROAD_SPACING) > 30 && Math.floorMod((long) y, (long) ROAD_SPACING) > 30;
     }
 
     /** Terminal, hangar e torre ao lado do pátio de cada pista principal (só os que estão perto). */
@@ -586,40 +561,29 @@ public final class OutsideView implements Disposable {
         }
     }
 
-    /** Prédios da cidade, mais altos no centro. Só os que estão na frente e a menos de 9 km. */
+    /** Prédios das cidades, mais altos no centro. Só os que estão na frente e a menos de 9 km. */
     private void city() {
         double reach = 9000;
-        double toCity = Math.hypot(CITY_X - camX, CITY_Y - camY);
-        if (toCity - CITY_RADIUS > reach) {
-            return;
-        }
-        long min = Math.floorDiv((long) -CITY_RADIUS, (long) BLOCK);
-        long max = Math.floorDiv((long) CITY_RADIUS, (long) BLOCK);
-        long baseX = Math.floorDiv((long) CITY_X, (long) BLOCK);
-        long baseY = Math.floorDiv((long) CITY_Y, (long) BLOCK);
-        for (long bx = baseX + min; bx <= baseX + max; bx++) {
-            for (long by = baseY + min; by <= baseY + max; by++) {
-                double x0 = bx * BLOCK + STREET;
-                double y0 = by * BLOCK + STREET;
-                double cx = x0 + (BLOCK - STREET) / 2, cy = y0 + (BLOCK - STREET) / 2;
-                double fromCenter = Math.hypot(cx - CITY_X, cy - CITY_Y);
-                if (fromCenter > CITY_RADIUS - 80) {
-                    continue;
+        for (Obstacles.City city : Obstacles.CITIES) {
+            if (Math.hypot(city.x() - camX, city.y() - camY) - city.radius() > reach) {
+                continue;
+            }
+            long block = (long) city.block();
+            long minX = Math.floorDiv((long) Math.max(city.x() - city.radius(), camX - reach), block);
+            long maxX = Math.floorDiv((long) Math.min(city.x() + city.radius(), camX + reach), block);
+            long minY = Math.floorDiv((long) Math.max(city.y() - city.radius(), camY - reach), block);
+            long maxY = Math.floorDiv((long) Math.min(city.y() + city.radius(), camY + reach), block);
+            for (long bx = minX; bx <= maxX; bx++) {
+                for (long by = minY; by <= maxY; by++) {
+                    double dx = (bx + 0.5) * block - camX;
+                    double dy = (by + 0.5) * block - camY;
+                    if (dx * fx + dy * fy < -200 || Math.hypot(dx, dy) > reach) {
+                        continue;
+                    }
+                    int color = BUILDINGS[hash(bx, by) % BUILDINGS.length];
+                    Obstacles.building(city, bx, by).ifPresent(b -> worldBox(b.x0(), b.y0(), b.x1(), b.y1(),
+                            b.height(), color, 0));
                 }
-                double dx = cx - camX, dy = cy - camY;
-                if (dx * fx + dy * fy < -200 || Math.hypot(dx, dy) > reach) {
-                    continue;
-                }
-                int h = hash(bx, by);
-                if (h % 10 == 0) {
-                    continue; // praça
-                }
-                double centrality = 1 - fromCenter / CITY_RADIUS;
-                double height = 8 + (h % 20) + centrality * centrality * (h % 90);
-                double inset = 6 + (h % 25);
-                double size = BLOCK - STREET;
-                worldBox(x0 + inset, y0 + inset, x0 + size - inset, y0 + size - inset, height,
-                        BUILDINGS[h % BUILDINGS.length], 0);
             }
         }
     }
@@ -841,11 +805,7 @@ public final class OutsideView implements Disposable {
     }
 
     private static int hash(long a, long b) {
-        long h = a * 73_856_093L ^ b * 19_349_663L;
-        h ^= h >>> 13;
-        h *= 0x5bd1e995L;
-        h ^= h >>> 15;
-        return (int) Math.floorMod(h, 1_000_003L);
+        return Obstacles.hash(a, b);
     }
 
     private static int shade(int color, double factor) {

@@ -23,6 +23,8 @@ public final class Labels {
     public static final String SIM_ON_GROUND = "SIM.ON_GROUND";
     public static final String SIM_RADIO_ALT = "SIM.RADIO_ALT";
     public static final String SIM_CRASHED = "SIM.CRASHED";
+    /** O que o avião atingiu no crash: "PREDIO", "ARVORE", ou vazio (crash no pouso). */
+    public static final String SIM_COLLISION = "SIM.COLLISION";
     /** Vento: de onde ele sopra (graus), velocidade (kt) e turbulência de 0 (nenhuma) a 3 (forte). */
     public static final String SIM_WIND_DIR = "SIM.WIND_DIR";
     public static final String SIM_WIND_SPD = "SIM.WIND_SPD";

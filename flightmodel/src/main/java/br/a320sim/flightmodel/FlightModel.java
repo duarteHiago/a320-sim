@@ -2,6 +2,7 @@ package br.a320sim.flightmodel;
 
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
+import br.a320sim.flightmodel.world.Obstacles;
 import br.a320sim.flightmodel.world.Runway;
 import br.a320sim.flightmodel.world.World;
 
@@ -74,6 +75,8 @@ public class FlightModel {
     private double aoa;
     private boolean onGround;
     private boolean crashed;
+    /** O que foi atingido ("PREDIO", "ARVORE"), ou vazio. */
+    private String collision = "";
 
     private final Random turbulence;
     private double gustVertical;
@@ -113,6 +116,7 @@ public class FlightModel {
         heading = runway.headingDeg();
         onGround = true;
         crashed = false;
+        collision = "";
         gustVertical = 0;
         gustRoll = 0;
         gustAlong = 0;
@@ -197,7 +201,23 @@ public class FlightModel {
         if (onGround) {
             alt = ground; // rodando no chão, acompanha o terreno
         }
+        checkObstacles();
         publish();
+    }
+
+    /** Prédio ou árvore no caminho: crash, e o avião fica no chão ali mesmo. */
+    private void checkObstacles() {
+        if (crashed) {
+            return;
+        }
+        Obstacles.collision(x, y, alt - ground).ifPresent(kind -> {
+            crashed = true;
+            collision = kind == Obstacles.Kind.BUILDING ? "PREDIO" : "ARVORE";
+            v = 0;
+            gamma = 0;
+            alt = ground;
+            onGround = true;
+        });
     }
 
     private void stepGround(double dt, double airspeed, double pitchRate, double thrust, double drag, double lift,
@@ -334,6 +354,7 @@ public class FlightModel {
         bus.publish(Labels.SIM_ON_GROUND, onGround);
         bus.publish(Labels.SIM_RADIO_ALT, (alt - ground) / FT);
         bus.publish(Labels.SIM_CRASHED, crashed);
+        bus.publish(Labels.SIM_COLLISION, collision);
     }
 
     /** Velocidade sobre o chão (m/s): no ar, a do avião em relação ao ar mais o vento. */

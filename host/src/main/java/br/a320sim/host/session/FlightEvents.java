@@ -8,7 +8,8 @@ import java.util.List;
 
 /**
  * Percebe pelo barramento os momentos que interessam ao debriefing: DECOLAGEM, POUSO (com a razão de
- * descida no toque) e CRASH. O host chama {@link #update} a cada passo e escreve o que vier no log.
+ * descida no toque), CRASH e COLISAO COM PREDIO / ARVORE.
+ * O host chama {@link #update} a cada passo e escreve o que vier no log.
  * <p>
  * Depois de um reposicionamento (comando do instrutor) chame {@link #resync}: o avião "pular" do chão
  * para 8000 ft não é uma decolagem.
@@ -18,6 +19,8 @@ public class FlightEvents {
     public static final String TAKEOFF = "DECOLAGEM";
     public static final String CRASH = "CRASH";
     public static final String LANDING = "POUSO";
+    /** Seguido do que foi atingido: "COLISAO COM PREDIO", "COLISAO COM ARVORE". */
+    public static final String COLLISION = "COLISAO COM ";
 
     private boolean onGround = true;
     private boolean crashed;
@@ -37,7 +40,8 @@ public class FlightEvents {
         boolean crash = bus.getBoolean(Labels.SIM_CRASHED);
         List<String> events = new ArrayList<>();
         if (crash && !crashed) {
-            events.add(CRASH);
+            String hit = bus.getString(Labels.SIM_COLLISION, "");
+            events.add(hit.isEmpty() ? CRASH : COLLISION + hit);
         } else if (ground && !onGround) {
             events.add(landing(lastAirborneVs));
         } else if (!ground && onGround) {

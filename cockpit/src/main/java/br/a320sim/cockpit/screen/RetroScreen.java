@@ -142,7 +142,7 @@ public abstract class RetroScreen extends ScreenAdapter {
         String file = "screenshots/sica-" + System.currentTimeMillis() + ".png";
         PixmapIO.writePNG(Gdx.files.local(file), pixmap);
         pixmap.dispose();
-        Gdx.app.log("SICA", "Screenshot salvo em " + file);
+        Gdx.app.log("SICA", "Screenshot salvo em " + file + " (" + Gdx.graphics.getFramesPerSecond() + " fps)");
     }
 
     @Override

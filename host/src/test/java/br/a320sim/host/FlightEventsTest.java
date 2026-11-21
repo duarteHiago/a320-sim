@@ -51,6 +51,20 @@ class FlightEventsTest {
     }
 
     @Test
+    void colisaoViraEventoComOQueFoiAtingido() {
+        step(false, false, -300);
+        bus.publish(Labels.SIM_COLLISION, "ARVORE");
+        assertEquals(List.of("COLISAO COM ARVORE"), step(true, true, 0));
+    }
+
+    @Test
+    void colisaoComPredio() {
+        step(false, false, 0);
+        bus.publish(Labels.SIM_COLLISION, "PREDIO");
+        assertEquals(List.of("COLISAO COM PREDIO"), step(true, true, 0));
+    }
+
+    @Test
     void resyncAceitaOEstadoSemEvento() {
         step(true, false, 0);
         bus.publish(Labels.SIM_ON_GROUND, false); // reposicionado em voo
