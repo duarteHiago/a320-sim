@@ -36,4 +36,6 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // NomesVisiveisTest lê o código de cockpit e host a partir da raiz do projeto
+    systemProperty 'sim.projectRoot', rootProject.projectDir.absolutePath
 }
