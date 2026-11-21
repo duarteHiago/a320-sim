@@ -122,7 +122,7 @@ gradlew test              # testes (física, voo, falhas, rede, cadastros, formu
 | PAUSAR / CONTINUAR | congela a simulação |
 | PISTA | volta o avião à cabeceira |
 | POS: &lt;nome&gt; | escolhe uma das posições iniciais cadastradas (cada clique passa para a próxima) |
-| IR P/ POSICAO | põe o avião na posição escolhida (no chão: cabeceira; em voo: no prolongamento da pista 15, com os sensores alinhados) |
+| IR P/ POSICAO | põe o avião na posição escolhida (no chão: cabeceira da pista dela; em voo: no prolongamento da pista, com os sensores alinhados) |
 | ALINHAR IR | alinhamento instantâneo dos sensores |
 | CARTUCHOS | desliga o avião e volta ao rack |
 | MOTOR 1 PARADO | apaga o motor 1 (alarme ENG 1 FAIL) |
@@ -181,6 +181,33 @@ Mouse no FCU: rodinha sobre SPD/HDG/ALT/V/S ajusta (SHIFT = x10), clique em AP1 
 4. Já no ar: **G** (recolhe o trem), **V** (flaps 0), **2** (CL)
 5. Ajuste ALT e HDG no FCU e clique **AP1** (no neo, também **A/THR**)
 
+## Aeroportos
+
+![Final curta da 10L de Guarulhos, com as luzes da 10R e o pátio à direita](docs/img/final-gru.png)
+
+| Aeroporto | Elevação | Pistas (comprimento) |
+|---|---|---|
+| **SBKP** Viracopos | 2170 ft | 15/33 (3240 m) |
+| **SBGR** Guarulhos | 2459 ft | 10L/28R (3700 m), 10R/28L (3000 m) |
+| **SBSP** Congonhas | 2631 ft | 17R/35L (1940 m), 17L/35R (1435 m) |
+
+Todas as pistas podem ser usadas nas posições iniciais. O seed traz, além das de Viracopos, **FINAL GRU 10L**, **FINAL CGH 17R** (5 NM, 1600 ft acima do aeroporto) e **PISTA GRU 10L**, **PISTA CGH 17R** (na cabeceira). Guarulhos usa a numeração atual: desde 2022 as pistas são 10L/28R e 10R/28L (eram 09L/27R e 09R/27L), por causa da mudança do campo magnético.
+
+**Como o mundo é montado** (`flightmodel/.../world`):
+
+- As pistas saem das coordenadas das duas cabeceiras (latitude/longitude), convertidas para milhas náuticas a partir da cabeceira 15 de Viracopos (origem do mundo), com a aproximação de Terra plana (erro de décimos de milha nessas distâncias).
+- O mapa é alinhado ao **norte magnético**, que é o que o piloto lê nos instrumentos: ele é girado ~20° para a pista 15 continuar com proa 148. Com isso as outras proas também ficam perto das magnéticas publicadas (10L ≈ 094, 17R ≈ 168).
+- O terreno é plano na elevação de cada aeroporto até 6,5 NM dele e varia suavemente entre eles. O altímetro, a altitude de rádio e o toque no chão usam esse terreno.
+- Cabeceiras deslocadas não são representadas. Taxiways, pátios e terminais são ilustrativos.
+
+**Fontes dos dados** (públicas, não oficiais; coordenadas e comprimentos conferidos entre elas, novembro de 2026):
+
+- Viracopos: [sprinkle.com/airport/SBKP](https://sprinkle.com/airport/SBKP), [pilotnav.com/airport/SBKP](https://pilotnav.com/airport/SBKP), [airport-data.com SBKP](https://airport-data.com/world-airports/SBKP-VCP/)
+- Guarulhos: [skyvector.com SBGR](https://skyvector.com/airport/SBGR/Guarulhos-Gov-Andre-F-Montoro-Airport), [pilotnav.com/airport/SBGR](https://www.pilotnav.com/airport/SBGR), [sprinkle.com/airport/SBGR](https://sprinkle.com/airport/SBGR), [airportguide.com GRU](https://airportguide.com/airport/info/GRU); renumeração das pistas: [Gazeta SP](https://www.gazetasp.com.br/estado/aeroporto-de-guarulhos-opera-com-novos-numeros-de-cabeceiras-de-pista/)
+- Congonhas: [skyvector.com SBSP](https://skyvector.com/airport/SBSP/Congonhas-Airport), [pilotnav.com/airport/SBSP](https://pilotnav.com/airport/SBSP), [sprinkle.com/airport/SBSP](https://sprinkle.com/airport/SBSP), [skybrary.aero SBSP](https://skybrary.aero/airports/sbsp)
+
+Para dados oficiais, a referência é o AIP Brasil no [AISWEB do DECEA](https://aisweb.decea.mil.br/). Os números do simulador servem para treino, não para navegação.
+
 ## Cadastros e histórico de treino
 
 ![Formulário de posição inicial com erros de validação](docs/img/cadastro-posicoes.png)
@@ -197,7 +224,7 @@ Na tela de título, **4 CADASTROS** abre:
 |---|---|
 | **Pessoas** (alunos e instrutores) | nome de 3 a 40 caracteres; matrícula obrigatória e única; e-mail válido se preenchido. Quem já tem sessões não é excluído, só desativado |
 | **Cartões** SD físicos | part number obrigatório; etiqueta opcional, até 10 caracteres e única. Cartão desconhecido lido com sucesso é cadastrado sozinho (sem etiqueta, para preencher); se já existe um cadastro manual com o mesmo part number e sem identificador, ele é adotado. Cada inserção no leitor conta uma leitura (data, contador e hash do `caixas.jar`). O identificador é o número de série do volume FAT32 |
-| **Posições iniciais** | nome único de 3 a 16 caracteres; altitude 0 a 41000 ft; proa 0 a 359; distância 0 a 100 NM. **No chão** = velocidade 0 e distância 0 (a altitude vira a do campo, 2170 ft, e fica bloqueada no formulário); **em voo** = 120 a 350 kt e pelo menos 500 ft acima do campo. Posição usada em sessões não pode ser excluída |
+| **Posições iniciais** | nome único de 3 a 16 caracteres; altitude 0 a 41000 ft; proa 0 a 359; distância 0 a 100 NM; destino (SBKP, SBGR ou SBSP) e uma pista que exista nele. **No chão** = velocidade 0 e distância 0 (a altitude vira a do aeroporto de destino e fica bloqueada no formulário); **em voo** = 120 a 350 kt e pelo menos 500 ft acima do aeroporto de destino. Posição usada em sessões não pode ser excluída |
 | **Sessões de treino** | gravadas pelo simulador: aqui só se vê (com os eventos), avalia (nota de 0 a 10 com uma casa, ou vazia) e exclui |
 
 Teclas: **N** novo, **ENTER** editar, **DEL** excluir (pede confirmação), **ESC** voltar. No formulário: **setas cima/baixo** (ou TAB) trocam de campo, **esquerda/direita** mudam as opções, **ENTER** salva, **ESC** cancela. Os erros aparecem em vermelho embaixo do campo.
