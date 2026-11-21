@@ -3,6 +3,8 @@ package br.a320sim.host;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
 import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 import br.a320sim.host.command.ApplyPositionCommand;
 import org.junit.jupiter.api.Test;
 
@@ -55,5 +57,44 @@ class ApplyPositionCommandTest {
     void ficaRegistradoNoLog() {
         host.execute(new ApplyPositionCommand("NA FINAL 5NM", 3770, 150, 148, 5));
         assertEquals("Posicao: NA FINAL 5NM", host.log().get(host.log().size() - 1).description());
+    }
+
+    @Test
+    void noChaoEmGuarulhosFicaNaCabeceiraDaPistaEscolhida() {
+        host.execute(new ApplyPositionCommand("PISTA GRU 10L", 2459, 0, 94, 0, "SBGR", "10L"));
+        Runway gru = World.runway("SBGR", "10L").orElseThrow();
+        assertTrue(host.flightModel().isOnGround());
+        assertEquals(gru.xNm(), bus.getDouble(Labels.TRUE_POS_X, 0), 1e-9);
+        assertEquals(gru.yNm(), bus.getDouble(Labels.TRUE_POS_Y, 0), 1e-9);
+        assertEquals(gru.headingDeg(), bus.getDouble(Labels.TRUE_HDG, 0), 1e-9);
+        assertEquals(2459, bus.getDouble(Labels.TRUE_ALT, 0), 1e-6);
+        assertEquals("SBGR 10L", bus.getString(Labels.SIM_DEST_RUNWAY, ""));
+    }
+
+    @Test
+    void naFinalDeCongonhasFicaNoProlongamentoDa17R() {
+        Runway cgh = World.runway("SBSP", "17R").orElseThrow();
+        host.execute(new ApplyPositionCommand("FINAL CGH 17R", 2631 + 1600, 150, cgh.headingDeg(), 5, "SBSP", "17R"));
+        double x = bus.getDouble(Labels.TRUE_POS_X, 0);
+        double y = bus.getDouble(Labels.TRUE_POS_Y, 0);
+        assertEquals(-5, cgh.alongNm(x, y), 1e-6, "5 NM antes da cabeceira");
+        assertEquals(0, cgh.acrossNm(x, y), 1e-6, "no eixo");
+        assertEquals(1600, bus.getDouble(Labels.SIM_RADIO_ALT, 0), 1);
+        assertEquals("SBSP 17R", bus.getString(Labels.SIM_DEST_RUNWAY, ""));
+    }
+
+    @Test
+    void sentidoContrarioUsaAOutraCabeceira() {
+        host.execute(new ApplyPositionCommand("PISTA 33", 2170, 0, 328, 0, "SBKP", "33"));
+        Runway r33 = World.runway("SBKP", "33").orElseThrow();
+        assertEquals(r33.xNm(), bus.getDouble(Labels.TRUE_POS_X, 0), 1e-9);
+        assertEquals(328, bus.getDouble(Labels.TRUE_HDG, 0), 1e-6);
+    }
+
+    @Test
+    void pistaDesconhecidaCaiNaCabeceira15() {
+        host.execute(new ApplyPositionCommand("ANTIGA", 2170, 0, 148, 0, "SBGR", "09L"));
+        assertEquals(0, bus.getDouble(Labels.TRUE_POS_X, 1), 1e-9);
+        assertEquals("SBKP 15", bus.getString(Labels.SIM_DEST_RUNWAY, ""));
     }
 }

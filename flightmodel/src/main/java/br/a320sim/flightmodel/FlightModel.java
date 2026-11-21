@@ -2,6 +2,8 @@ package br.a320sim.flightmodel;
 
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 
 /**
  * Física "arcade-realista" do A320: sustentação, arrasto, empuxo e peso.
@@ -43,7 +45,10 @@ public class FlightModel {
 
     private double x;
     private double y;
+    /** Altitude em metros acima do nível do mar. */
     private double alt;
+    /** Altitude do terreno embaixo do avião (m), atualizada a cada passo. */
+    private double ground;
     private double v;
     private double gamma;
     private double pitch;
@@ -58,15 +63,22 @@ public class FlightModel {
         resetOnRunway();
     }
 
+    /** Na cabeceira 15 de Viracopos. */
     public void resetOnRunway() {
-        x = 0;
-        y = 0;
-        alt = 0;
+        resetOnRunway(World.HOME);
+    }
+
+    /** Parado na cabeceira de uma pista, alinhado com ela. */
+    public void resetOnRunway(Runway runway) {
+        x = runway.xNm() * NM;
+        y = runway.yNm() * NM;
+        ground = terrain();
+        alt = ground;
         v = 0;
         gamma = 0;
         pitch = 0;
         bank = 0;
-        heading = RUNWAY_HEADING;
+        heading = runway.headingDeg();
         onGround = true;
         crashed = false;
         publish();
@@ -82,7 +94,8 @@ public class FlightModel {
         resetOnRunway();
         x = xNm * NM;
         y = yNm * NM;
-        alt = (altFt - FIELD_ELEVATION_FT) * FT;
+        ground = terrain();
+        alt = Math.max(altFt * FT, ground);
         v = iasKt * KT / Math.sqrt(density() / 1.225);
         heading = headingDeg;
         onGround = false;
@@ -128,6 +141,10 @@ public class FlightModel {
         double hdg = Math.toRadians(heading);
         x += v * Math.cos(gamma) * Math.sin(hdg) * dt;
         y += v * Math.cos(gamma) * Math.cos(hdg) * dt;
+        ground = terrain();
+        if (onGround) {
+            alt = ground; // rodando no chão, acompanha o terreno
+        }
         publish();
     }
 
@@ -163,7 +180,7 @@ public class FlightModel {
         heading = wrap360(heading + Math.toDegrees(G * Math.tan(turnBank) / v) * dt);
         alt += v * Math.sin(gamma) * dt;
 
-        if (alt <= 0) {
+        if (alt <= ground) {
             touchdown(gearDown);
         }
     }
@@ -171,7 +188,7 @@ public class FlightModel {
     private void touchdown(boolean gearDown) {
         double vsFpm = v * Math.sin(gamma) / FT * 60;
         crashed = !gearDown || vsFpm < -1500 || Math.abs(bank) > 15 || pitch < -5;
-        alt = 0;
+        alt = ground;
         gamma = 0;
         bank = 0;
         pitch = Math.max(0, pitch);
@@ -181,8 +198,13 @@ public class FlightModel {
         }
     }
 
+    /** Terreno embaixo da posição atual, em metros. */
+    private double terrain() {
+        return World.terrainFt(x / NM, y / NM) * FT;
+    }
+
     private double density() {
-        return 1.225 * Math.exp(-(alt + FIELD_ELEVATION_FT * FT) / 8500);
+        return 1.225 * Math.exp(-alt / 8500);
     }
 
     /** Ângulo de ataque que sustenta o peso na velocidade atual (para reposicionar em voo). */
@@ -211,7 +233,7 @@ public class FlightModel {
     private void publish() {
         double ias = v / KT * Math.sqrt(density() / 1.225);
         bus.publish(Labels.TRUE_IAS, ias);
-        bus.publish(Labels.TRUE_ALT, alt / FT + FIELD_ELEVATION_FT);
+        bus.publish(Labels.TRUE_ALT, alt / FT);
         bus.publish(Labels.TRUE_VS, v * Math.sin(gamma) / FT * 60);
         bus.publish(Labels.TRUE_PITCH, pitch);
         bus.publish(Labels.TRUE_ROLL, bank);
@@ -222,7 +244,7 @@ public class FlightModel {
         bus.publish(Labels.TRUE_POS_X, x / NM);
         bus.publish(Labels.TRUE_POS_Y, y / NM);
         bus.publish(Labels.SIM_ON_GROUND, onGround);
-        bus.publish(Labels.SIM_RADIO_ALT, alt / FT);
+        bus.publish(Labels.SIM_RADIO_ALT, (alt - ground) / FT);
         bus.publish(Labels.SIM_CRASHED, crashed);
     }
 
