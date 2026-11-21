@@ -256,9 +256,10 @@ public class CockpitScreen extends RetroScreen {
     }
 
     @Override
+    /** Só as telas CRT do painel ceo têm linhas de varredura; a vista pela janela é o mundo lá fora. */
     protected boolean scanlines() {
         Theme theme = theme();
-        return theme != null && theme.scanlines();
+        return !windowView && theme != null && theme.scanlines();
     }
 
     private Theme theme() {

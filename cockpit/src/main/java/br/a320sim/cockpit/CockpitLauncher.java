@@ -19,7 +19,13 @@ public final class CockpitLauncher {
         Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
         config.setTitle("SICA");
         config.setWindowIcon(FileType.Classpath, ICONS);
-        config.setWindowedMode(RetroScreen.WIDTH * 2, RetroScreen.HEIGHT * 2);
+        // -Dsim.janela=1920x1009 abre a janela nesse tamanho (para testar a ampliação em telas grandes)
+        String[] size = System.getProperty("sim.janela", "").split("x");
+        if (size.length == 2 && size[0].matches("\\d+") && size[1].matches("\\d+")) {
+            config.setWindowedMode(Integer.parseInt(size[0]), Integer.parseInt(size[1]));
+        } else {
+            config.setWindowedMode(RetroScreen.WIDTH * 2, RetroScreen.HEIGHT * 2);
+        }
         config.setForegroundFPS(60);
         config.useVsync(true);
         new Lwjgl3Application(new SimApp(), config);
