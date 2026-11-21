@@ -50,6 +50,11 @@ public class PessoaServico {
         return repositorio.buscar(id);
     }
 
+    /** Sessões em que a pessoa aparece, como aluno ou instrutor. */
+    public int contarSessoes(long id) {
+        return repositorio.contarSessoes(id);
+    }
+
     /**
      * Insere (id nulo) ou atualiza. Os textos são aparados e e-mail vazio vira nulo.
      *

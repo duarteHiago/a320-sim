@@ -2,13 +2,21 @@ package br.a320sim.cockpit;
 
 import br.a320sim.cockpit.audio.Sfx;
 import br.a320sim.cockpit.audio.SoundFx;
+import br.a320sim.cockpit.crud.CartoesAdapter;
+import br.a320sim.cockpit.crud.PessoasAdapter;
+import br.a320sim.cockpit.crud.PosicoesAdapter;
+import br.a320sim.cockpit.crud.SessoesAdapter;
+import br.a320sim.cockpit.screen.CadastrosScreen;
 import br.a320sim.cockpit.screen.CockpitScreen;
 import br.a320sim.cockpit.screen.ConnectScreen;
+import br.a320sim.cockpit.screen.CrudScreen;
 import br.a320sim.cockpit.screen.IntroScreen;
 import br.a320sim.cockpit.screen.IosScreen;
 import br.a320sim.cockpit.screen.RackScreen;
 import br.a320sim.cockpit.screen.TitleScreen;
 import br.a320sim.cockpit.session.LocalSession;
+import br.a320sim.dados.BancoLocal;
+import br.a320sim.dados.Dados;
 import br.a320sim.host.Host;
 import br.a320sim.host.cartridge.AutoReader;
 import br.a320sim.host.cartridge.CartridgeLibrary;
@@ -19,10 +27,13 @@ import br.a320sim.net.SimServer;
 import com.badlogic.gdx.Game;
 
 import java.io.IOException;
+import java.nio.file.Path;
 
 /**
  * O mesmo programa roda nos dois PCs; o papel é escolhido na tela de título:
  * SOLO (tudo aqui), INSTRUTOR (host + estação do instrutor) ou ALUNO (cockpit conectado ao instrutor).
+ * <p>
+ * O banco (cadastros e sessões) só é aberto onde o host roda: no modo ALUNO ele fica fechado.
  */
 public class SimApp extends Game {
 
@@ -32,6 +43,7 @@ public class SimApp extends Game {
     private static final long WATCH_MILLIS = 700;
 
     private Host host;
+    private final BancoLocal banco = BancoLocal.doSistema();
     private CartridgeLibrary library;
     private HotPlug hotPlug;
     private SoundFx sound;
@@ -43,7 +55,7 @@ public class SimApp extends Game {
     public void create() {
         host = new Host();
         library = new CartridgeLibrary(AutoReader.fromSystemProperties(),
-                new CartridgeLoader(new ClasspathModuleFactory()));
+                new CartridgeLoader(new ClasspathModuleFactory(), banco.politica()));
         library.startWatching(WATCH_MILLIS);
         hotPlug = new HotPlug(host, library);
         sound = new SoundFx();
@@ -58,6 +70,10 @@ public class SimApp extends Game {
             startSolo();
         } else if (System.getProperty("sim.autostart") != null) {
             startSolo();
+        } else if (!System.getProperty("sim.crud", "").isBlank()) {
+            showCadastro(System.getProperty("sim.crud").split(",")[0].strip());
+        } else if ("CadastrosScreen".equals(System.getProperty("sim.shotScreen"))) {
+            showCadastros();
         } else if ("TitleScreen".equals(System.getProperty("sim.shotScreen"))) {
             showTitle();
         } else {
@@ -91,7 +107,28 @@ public class SimApp extends Game {
 
     public void startStudent() {
         mode = Mode.STUDENT;
+        banco.close(); // o aluno não grava nada; libera o arquivo para um instrutor no mesmo PC
         setScreen(new ConnectScreen(this));
+    }
+
+    public void showCadastros() {
+        setScreen(new CadastrosScreen(this));
+    }
+
+    /** Abre um cadastro: pessoas, cartoes, posicoes ou sessoes. */
+    public void showCadastro(String name) {
+        Dados dados = banco.abrir().orElse(null);
+        if (dados == null) {
+            showCadastros();
+            return;
+        }
+        switch (name) {
+            case "pessoas" -> setScreen(new CrudScreen<>(this, new PessoasAdapter(dados.pessoas())));
+            case "cartoes" -> setScreen(new CrudScreen<>(this, new CartoesAdapter(dados.cartoes())));
+            case "posicoes" -> setScreen(new CrudScreen<>(this, new PosicoesAdapter(dados.posicoes())));
+            case "sessoes" -> setScreen(new CrudScreen<>(this, new SessoesAdapter(dados.sessoes())));
+            default -> showCadastros();
+        }
     }
 
     /** Depois do boot: o instrutor vai para a estação dele, no SOLO o próprio aluno pilota. */
@@ -145,6 +182,14 @@ public class SimApp extends Game {
         return server;
     }
 
+    public BancoLocal banco() {
+        return banco;
+    }
+
+    public String bancoCaminho() {
+        return Path.of(System.getProperty("sim.db", BancoLocal.PADRAO)).toAbsolutePath() + ".mv.db";
+    }
+
     private void closeServer() {
         if (server != null) {
             server.close();
@@ -157,6 +202,7 @@ public class SimApp extends Game {
         super.dispose(); // chama hide() da tela atual, que se descarta
         closeServer();
         library.close();
+        banco.close();
         sound.dispose();
     }
 }

@@ -42,6 +42,7 @@ public class TitleScreen extends RetroScreen {
 
     private final Option[] options;
     private final String error;
+    private final boolean hasDatabase;
     private final OutsideView view = new OutsideView();
     private final DataBus demo = new DataBus();
     private int selected;
@@ -54,8 +55,11 @@ public class TitleScreen extends RetroScreen {
         options = new Option[]{
                 new Option("SOLO", "tudo neste PC: voce monta o aviao e pilota", app::startSolo),
                 new Option("INSTRUTOR", "este PC roda o aviao e comanda a sessao do aluno", app::startInstructor),
-                new Option("ALUNO", "conectar ao PC do instrutor e pilotar", app::startStudent)};
+                new Option("ALUNO", "conectar ao PC do instrutor e pilotar", app::startStudent),
+                new Option("CADASTROS", "alunos, instrutores, cartoes, posicoes e sessoes", app::showCadastros)};
         error = app.takeError();
+        // Aqui ainda não se sabe o papel: abre para mostrar se há banco (o modo ALUNO fecha de novo)
+        hasDatabase = app.banco().abrir().isPresent();
     }
 
     @Override
@@ -135,14 +139,14 @@ public class TitleScreen extends RetroScreen {
         Sprites.logo(d, WIDTH / 2f, 304, 5);
 
         // Menu num painel translúcido sobre a vista
-        float panelX = 150, panelY = 70, panelW = 340, panelH = 150;
+        float panelX = 150, panelY = 70, panelW = 340, panelH = 160;
         d.rect(panelX, panelY, panelW, panelH, PANEL);
         d.frame(panelX, panelY, panelW, panelH, PANEL_EDGE);
         for (int i = 0; i < options.length; i++) {
-            float y = panelY + panelH - 28 - i * 44;
+            float y = panelY + panelH - 26 - i * 36;
             boolean active = i == selected;
             if (active) {
-                d.rect(panelX + 6, y - 22, panelW - 12, 40, new Color(1, 1, 1, 0.08f));
+                d.rect(panelX + 6, y - 21, panelW - 12, 35, new Color(1, 1, 1, 0.08f));
                 if ((time % 0.8f) < 0.55f) {
                     d.text(">", panelX + 20, y + 2, YELLOW, Align.CENTER, 2);
                 }
@@ -156,7 +160,10 @@ public class TitleScreen extends RetroScreen {
         if (error != null) {
             d.text(error, WIDTH / 2f, 36, RED, Align.CENTER);
         }
-        String help = MenuInput.hasController() ? "DIRECIONAL + A     B: sair" : "SETAS + ENTER  ou  1/2/3     ESC: sair";
+        if (!hasDatabase) {
+            d.text("SEM BANCO", WIDTH - 8, 350, RED, Align.RIGHT);
+        }
+        String help = MenuInput.hasController() ? "DIRECIONAL + A     B: sair" : "SETAS + ENTER  ou  1/2/3/4     ESC: sair";
         if (exitArmed > 0) {
             help = MenuInput.hasController() ? "APERTE B DE NOVO PARA SAIR" : "APERTE ESC DE NOVO PARA SAIR";
         }

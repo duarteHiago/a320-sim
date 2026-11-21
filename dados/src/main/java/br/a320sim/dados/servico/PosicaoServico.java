@@ -51,6 +51,10 @@ public class PosicaoServico {
         return repositorio.buscar(id);
     }
 
+    public int contarSessoes(long id) {
+        return repositorio.contarSessoes(id);
+    }
+
     /**
      * Insere ou atualiza. No chão, a altitude é corrigida para a elevação do campo antes de gravar.
      *
