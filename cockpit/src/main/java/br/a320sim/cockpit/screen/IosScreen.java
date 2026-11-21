@@ -7,7 +7,9 @@ import br.a320sim.cockpit.gfx.RetroButton;
 import br.a320sim.cockpit.gfx.TextInput;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
-import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.flightmodel.world.Airport;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 import br.a320sim.host.Host;
 import br.a320sim.cockpit.audio.Sfx;
 import br.a320sim.dados.DadosException;
@@ -279,13 +281,17 @@ public class IosScreen extends RetroScreen {
         for (int ring = 5; ring <= RANGE_NM; ring += 5) {
             d.circle(cx, cy, ring * ppn, LINE);
         }
-        double rwy = Math.toRadians(FlightModel.RUNWAY_HEADING);
-        float rx = cx + (float) (-posX * ppn);
-        float ry = cy + (float) (-posY * ppn);
-        d.filled().setColor(WHITE);
-        d.filled().rectLine(rx, ry, rx + (float) (Math.sin(rwy) * 1.75 * ppn),
-                ry + (float) (Math.cos(rwy) * 1.75 * ppn), 3);
-        d.text("SBKP", rx - 6, ry + 10, GREY, Align.RIGHT);
+        // As pistas dos aeroportos no alcance do mapa, com o código de cada um
+        for (Airport airport : World.AIRPORTS) {
+            for (Runway r : airport.strips()) {
+                d.filled().setColor(WHITE);
+                d.filled().rectLine(cx + (float) ((r.xNm() - posX) * ppn), cy + (float) ((r.yNm() - posY) * ppn),
+                        cx + (float) ((r.endXNm() - posX) * ppn), cy + (float) ((r.endYNm() - posY) * ppn), 3);
+            }
+            double[] c = airport.center();
+            d.text(airport.icao(), cx + (float) ((c[0] - posX) * ppn) - 8, cy + (float) ((c[1] - posY) * ppn) + 12,
+                    GREY, Align.RIGHT);
+        }
         for (double[] p : trail) {
             d.rect(cx + (float) ((p[0] - posX) * ppn) - 1, cy + (float) ((p[1] - posY) * ppn) - 1, 2, 2, MAGENTA);
         }

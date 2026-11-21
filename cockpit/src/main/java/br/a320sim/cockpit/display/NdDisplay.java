@@ -5,7 +5,9 @@ import br.a320sim.cockpit.gfx.Draw.Align;
 import br.a320sim.cockpit.gfx.Theme;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
-import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.flightmodel.world.Airport;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 import com.badlogic.gdx.graphics.Color;
 
 import java.util.ArrayDeque;
@@ -19,7 +21,6 @@ public final class NdDisplay implements CockpitDisplay {
 
     private static final float RANGE_NM = 10;
     private static final float RADIUS = 78;
-    private static final double RUNWAY_LENGTH_NM = 1.75;
     private static final int TRAIL_POINTS = 80;
     private static final double TRAIL_SECONDS = 3;
 
@@ -75,12 +76,21 @@ public final class NdDisplay implements CockpitDisplay {
             float[] s = toScreen(p[0] - posX, p[1] - posY, hdg, cx, cy);
             d.rect(s[0] - 1, s[1] - 1, 2, 2, t.magenta());
         }
-        double rwy = Math.toRadians(FlightModel.RUNWAY_HEADING);
-        float[] start = toScreen(-posX, -posY, hdg, cx, cy);
-        float[] end = toScreen(Math.sin(rwy) * RUNWAY_LENGTH_NM - posX, Math.cos(rwy) * RUNWAY_LENGTH_NM - posY,
-                hdg, cx, cy);
-        d.filled().setColor(t.white());
-        d.filled().rectLine(start[0], start[1], end[0], end[1], 3);
+        // Todas as pistas do mundo que estão no alcance, com o código do aeroporto
+        for (Airport airport : World.AIRPORTS) {
+            double[] c = airport.center();
+            if (Math.hypot(c[0] - posX, c[1] - posY) > RANGE_NM * 2) {
+                continue;
+            }
+            for (Runway r : airport.strips()) {
+                float[] start = toScreen(r.xNm() - posX, r.yNm() - posY, hdg, cx, cy);
+                float[] end = toScreen(r.endXNm() - posX, r.endYNm() - posY, hdg, cx, cy);
+                d.filled().setColor(t.white());
+                d.filled().rectLine(start[0], start[1], end[0], end[1], 3);
+            }
+            float[] label = toScreen(c[0] - posX, c[1] - posY, hdg, cx, cy);
+            d.text(airport.icao(), label[0] + 12, label[1] - 8, t.cyan(), Align.LEFT);
+        }
         d.unclip();
 
         d.circle(cx, cy, RADIUS, t.white());

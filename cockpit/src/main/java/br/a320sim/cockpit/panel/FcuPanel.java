@@ -39,6 +39,8 @@ public final class FcuPanel {
 
     private double spd = 250;
     private double hdg = FlightModel.RUNWAY_HEADING;
+    /** A proa do FCU começa na do avião (na pista ou na final escolhida), não fixa em 148. */
+    private boolean headingSynced;
     private double alt = 5000;
     private double vs;
     private int apPushes;
@@ -72,6 +74,10 @@ public final class FcuPanel {
     }
 
     public void publish(DataBus bus) {
+        if (!headingSynced && bus.has(Labels.TRUE_HDG)) {
+            hdg = Math.floorMod(Math.round(bus.getDouble(Labels.TRUE_HDG, hdg)), 360);
+            headingSynced = true;
+        }
         bus.publish(Labels.PANEL_SPD, spd);
         bus.publish(Labels.PANEL_HDG, hdg);
         bus.publish(Labels.PANEL_ALT, alt);
