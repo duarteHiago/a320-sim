@@ -11,6 +11,7 @@ import br.a320sim.host.command.InstructorCommand;
 import br.a320sim.host.failure.Failure;
 import br.a320sim.host.rack.Rack;
 import br.a320sim.host.rack.RackReport;
+import br.a320sim.host.session.FlightEvents;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,11 +32,12 @@ public class Host {
     private final FlightModel flightModel = new FlightModel(bus);
     private final Set<Failure> failures = new LinkedHashSet<>();
     private final List<LoggedCommand> log = new ArrayList<>();
+    private final FlightEvents flightEvents = new FlightEvents();
     private boolean powered;
     private double simTime;
     private double pending;
 
-    /** Um comando do instrutor e o instante da simulação em que ele aconteceu. */
+    /** Um comando do instrutor (ou um evento do voo, como DECOLAGEM) e o instante da simulação em que aconteceu. */
     public record LoggedCommand(double simTime, String description) {
     }
 
@@ -73,6 +75,7 @@ public class Host {
             log.clear();
             bus.publish(Labels.SIM_FREEZE, false);
             flightModel.resetOnRunway();
+            flightEvents.resync(bus);
             for (AvionicsModule module : rack.modules()) {
                 module.powerUp(bus);
                 selfTests.put(module, module.selfTest());
@@ -137,7 +140,13 @@ public class Host {
 
     public void execute(InstructorCommand command) {
         command.execute(this);
+        flightEvents.resync(bus); // reposicionar não é decolar nem pousar
         log.add(new LoggedCommand(simTime, command.description()));
+    }
+
+    /** Escreve no log algo que aconteceu no voo (não é um comando). */
+    public void logEvent(String description) {
+        log.add(new LoggedCommand(simTime, description));
     }
 
     public List<LoggedCommand> log() {
@@ -168,6 +177,7 @@ public class Host {
                 failures.forEach(failure -> failure.apply(bus));
             }
             flightModel.step(TICK_SECONDS);
+            flightEvents.update(bus).forEach(this::logEvent);
         }
     }
 }

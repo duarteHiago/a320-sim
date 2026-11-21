@@ -63,6 +63,8 @@ class FlightIntegrationTest {
             bus.publish(Labels.CTL_PITCH, rotate ? 0.6 : 0.0);
         });
         assertFalse(bus.getBoolean(Labels.SIM_ON_GROUND), "deveria ter decolado");
+        assertEquals(1, host.log().stream().filter(e -> e.description().equals("DECOLAGEM")).count(),
+                "a decolagem vai para o log da sessao");
 
         bus.publish(Labels.CTL_FLAPS, 0.0);
         bus.publish(Labels.CTL_GEAR_DOWN, false);
