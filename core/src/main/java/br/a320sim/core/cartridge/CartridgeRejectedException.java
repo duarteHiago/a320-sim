@@ -9,7 +9,9 @@ public class CartridgeRejectedException extends RuntimeException {
         SEM_ASSINATURA("SEM ASSINATURA"),
         ASSINATURA_INVALIDA("ASSINATURA INVALIDA"),
         ARQUIVO_FALTANDO("ARQUIVO FALTANDO"),
-        ARQUIVO_CORROMPIDO("ARQUIVO CORROMPIDO");
+        ARQUIVO_CORROMPIDO("ARQUIVO CORROMPIDO"),
+        /** O cartão é legítimo, mas está BLOQUEADO ou PERDIDO no cadastro. */
+        CARTAO_BLOQUEADO("CARTAO BLOQUEADO");
 
         private final String label;
 
