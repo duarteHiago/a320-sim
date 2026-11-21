@@ -128,6 +128,9 @@ gradlew test              # testes (física, voo, falhas, rede, cadastros, formu
 | MOTOR 1 PARADO | apaga o motor 1 (alarme ENG 1 FAIL) |
 | PANE NOS SENSORES | some velocidade, altitude e atitude; fly-by-wire cai para Lei Direta |
 | PILOTO AUTOMATICO INOP | desengaja o AP e impede religar |
+| VENTO | alterna CALMO, TRAVES 15 KT (pela direita da pista de destino, turbulência leve) e FORTE 30 KT (40° da pista, turbulência forte); o vento aparece no ND |
+| AVES | solta um bando de aves cruzando o caminho do avião, ~1,5 NM à frente |
+| AVES AUTO | bandos ao acaso perto dos aeroportos, abaixo de 3000 ft (desligado no começo de cada sessão) |
 | MSG (ENTER) | escreve uma mensagem que aparece na tela do aluno |
 
 O mapa mostra o avião do aluno, o rastro e a pista; o espelho mostra os dados reais e os alertas que o aluno está vendo.
@@ -207,6 +210,14 @@ Todas as pistas podem ser usadas nas posições iniciais. O seed traz, além das
 - Congonhas: [skyvector.com SBSP](https://skyvector.com/airport/SBSP/Congonhas-Airport), [pilotnav.com/airport/SBSP](https://pilotnav.com/airport/SBSP), [sprinkle.com/airport/SBSP](https://sprinkle.com/airport/SBSP), [skybrary.aero SBSP](https://skybrary.aero/airports/sbsp)
 
 Para dados oficiais, a referência é o AIP Brasil no [AISWEB do DECEA](https://aisweb.decea.mil.br/). Os números do simulador servem para treino, não para navegação.
+
+## Vento, obstáculos e aves
+
+- **Vento e turbulência** (botão VENTO na IOS): o avião deriva com o vento, o velocímetro mede o ar e a velocidade sobre o chão (GS) soma ou desconta o vento. A turbulência sacode em subida/descida, inclinação (que volta sozinha: o fly-by-wire segura a atitude) e velocidade. As rajadas são sorteadas com semente fixa, então o mesmo voo se repete igual nos testes.
+- **Prédios e árvores**: as cidades de Campinas, São Paulo (Congonhas fica dentro dela) e Guarulhos, e as árvores das plantações, saem de um gerador compartilhado pela vista e pelo modelo de voo. Bater num prédio ou árvore é CRASH, com o evento **COLISAO COM PREDIO** ou **COLISAO COM ARVORE** no histórico da sessão. Antes de cada cabeceira a altura dos prédios é limitada por uma rampa de 2° (como as zonas de proteção de aeródromo): uma aproximação na rampa de 3° nunca bate.
+- **Aves**: o bando voa em V, migrando a 30 kt. Atravessar o bando para o motor do lado atingido (ENG FAIL) e, pelo meio, os dois; o evento **COLISAO COM AVES (MOTOR 1)** vai para o histórico. O bando passa pelo barramento, então o aluno também vê pela janela.
+
+Atalhos para testar sem teclado: `-Dsim.vento=1` (ou `2`) aplica uma predefinição de vento depois do boot; `-Dsim.aves=1` solta um bando à frente e `-Dsim.aves=auto` liga as aves automáticas.
 
 ## Cadastros e histórico de treino
 
