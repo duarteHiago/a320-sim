@@ -23,6 +23,8 @@ import br.a320sim.dados.BancoLocal;
 import br.a320sim.dados.Dados;
 import br.a320sim.dados.modelo.Sessao;
 import br.a320sim.host.Host;
+import br.a320sim.host.command.ReleaseBirdsCommand;
+import br.a320sim.host.command.SetAutoBirdsCommand;
 import br.a320sim.host.command.SetWeatherCommand;
 import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.host.cartridge.AutoReader;
@@ -173,6 +175,13 @@ public class SimApp extends Game {
     public void afterBoot() {
         sessions.start(plan, mode == Mode.INSTRUCTOR ? Sessao.INSTRUTOR : Sessao.SOLO);
         // Atalho de teste: -Dsim.vento=1 (TRAVES 15 KT) ou 2 (FORTE 30 KT), relativo à pista de destino
+        // Atalho de teste: -Dsim.aves=1 solta um bando à frente; -Dsim.aves=auto liga as aves automáticas
+        String birds = System.getProperty("sim.aves", "");
+        if (birds.equals("1")) {
+            host.execute(new ReleaseBirdsCommand());
+        } else if (birds.equals("auto")) {
+            host.execute(new SetAutoBirdsCommand(true));
+        }
         String wind = System.getProperty("sim.vento", "");
         if (wind.matches("[0-2]")) {
             host.execute(SetWeatherCommand.presets(Windshield.destination(host.bus())).get(Integer.parseInt(wind)));

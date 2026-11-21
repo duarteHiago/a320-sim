@@ -7,7 +7,9 @@ import br.a320sim.core.cartridge.CartridgeGroup;
 import br.a320sim.core.module.AvionicsModule;
 import br.a320sim.core.module.SelfTestResult;
 import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.host.birds.Birds;
 import br.a320sim.host.command.InstructorCommand;
+import br.a320sim.host.failure.EngineFailure;
 import br.a320sim.host.failure.Failure;
 import br.a320sim.host.rack.Rack;
 import br.a320sim.host.rack.RackReport;
@@ -33,6 +35,8 @@ public class Host {
     private final Set<Failure> failures = new LinkedHashSet<>();
     private final List<LoggedCommand> log = new ArrayList<>();
     private final FlightEvents flightEvents = new FlightEvents();
+    /** Semente fixa: os bandos automáticos saem sempre na mesma sequência (testes repetíveis). */
+    private final Birds birds = new Birds(20_26);
     private boolean powered;
     private double simTime;
     private double pending;
@@ -76,6 +80,7 @@ public class Host {
             bus.publish(Labels.SIM_WIND_DIR, 0.0); // cada sessão começa sem vento
             bus.publish(Labels.SIM_WIND_SPD, 0.0);
             bus.publish(Labels.SIM_TURBULENCE, 0.0);
+            birds.reset(bus);
             bus.publish(Labels.SIM_FREEZE, false);
             flightModel.resetOnRunway();
             flightEvents.resync(bus);
@@ -156,6 +161,10 @@ public class Host {
         return Collections.unmodifiableList(log);
     }
 
+    public Birds birds() {
+        return birds;
+    }
+
     public void toggleFailure(Failure failure) {
         if (!failures.remove(failure)) {
             failures.add(failure);
@@ -181,6 +190,16 @@ public class Host {
             }
             flightModel.step(TICK_SECONDS);
             flightEvents.update(bus).forEach(this::logEvent);
+            double birdTime = bus.getBoolean(Labels.SIM_FREEZE) ? 0 : TICK_SECONDS; // pausado, o bando para
+            birds.update(bus, birdTime).ifPresent(strike -> {
+                // O motor do lado atingido para (sem religar um que já estava parado)
+                for (int engine : strike.engines()) {
+                    if (!hasFailure(new EngineFailure(engine))) {
+                        toggleFailure(new EngineFailure(engine));
+                    }
+                }
+                logEvent(strike.description());
+            });
         }
     }
 }

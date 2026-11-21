@@ -154,6 +154,8 @@ public final class OutsideView implements Disposable {
     private static final int STROBE = 0xffffffff;
     private static final int GREEN_LIGHT = 0x40ff60ff;
     private static final int RED_LIGHT = 0xff3030ff;
+    private static final int BIRD = 0x1c1c22ff;
+    private static final int BIRDS_PER_WING = 12;
 
     private final Pixmap pixmap = new Pixmap(WIDTH, HEIGHT, Pixmap.Format.RGBA8888);
     private final Texture texture = new Texture(pixmap);
@@ -201,6 +203,7 @@ public final class OutsideView implements Disposable {
             city();
         }
         lights(simTime);
+        birds(bus, simTime);
         cloudFog();
 
         IntBuffer buffer = pixmap.getPixels().duplicate().order(ByteOrder.BIG_ENDIAN).asIntBuffer();
@@ -756,6 +759,69 @@ public final class OutsideView implements Disposable {
             double y = s.worldY(along, across);
             double angle = Math.toDegrees(Math.atan2(camZ - 1, Math.hypot(camX - x, camY - y)));
             light(s, along, across, angle > PAPI_ANGLES[i] ? STROBE : RED_LIGHT, true);
+        }
+    }
+
+    /**
+     * Bando de aves em V, batendo asa. Cada ave é um pontinho escuro de longe e um "v" de perto
+     * (exageradas de propósito: do tamanho real, só apareceriam em cima do avião).
+     */
+    private void birds(DataBus bus, double simTime) {
+        if (!bus.getBoolean(Labels.SIM_BIRDS)) {
+            return;
+        }
+        double fx0 = bus.getDouble(Labels.SIM_BIRDS_X, 0) * NM;
+        double fy0 = bus.getDouble(Labels.SIM_BIRDS_Y, 0) * NM;
+        // Altura do bando no referencial da câmera (que conta a partir do chão embaixo do avião)
+        double fz0 = camZ + (bus.getDouble(Labels.SIM_BIRDS_ALT, 0) - bus.getDouble(Labels.TRUE_ALT, 0)) * FT;
+        double h = Math.toRadians(bus.getDouble(Labels.SIM_BIRDS_HDG, 0));
+        double ax = Math.sin(h), ay = Math.cos(h);
+        double sx = Math.cos(h), sy = -Math.sin(h);
+        for (int i = 0; i < BIRDS_PER_WING * 2 + 1; i++) {
+            int rank = (i + 1) / 2;
+            int side = i % 2 == 0 ? 1 : -1;
+            int jitter = hash(i, 77);
+            double back = rank * 12 + jitter % 5;
+            double lateral = side * (rank * 9 + jitter % 4);
+            double up = (jitter % 7) - 3;
+            boolean wingsUp = Math.sin(simTime * 9 + i * 1.7) > 0;
+            bird(fx0 - ax * back + sx * lateral, fy0 - ay * back + sy * lateral, fz0 + up, wingsUp);
+        }
+    }
+
+    private void bird(double x, double y, double z, boolean wingsUp) {
+        if (!project(x, y, z)) {
+            return;
+        }
+        double distance = projected[2];
+        if (distance > 6000) {
+            return;
+        }
+        int col = (int) Math.floor(projected[0]);
+        int row = (int) Math.floor(projected[1]);
+        if (distance < 400) {
+            // "v" de 5 pixels: as pontas das asas sobem e descem
+            int tip = wingsUp ? -1 : 0;
+            birdPixel(col - 2, row + tip, distance);
+            birdPixel(col - 1, row, distance);
+            birdPixel(col, row + 1, distance);
+            birdPixel(col + 1, row, distance);
+            birdPixel(col + 2, row + tip, distance);
+        } else {
+            birdPixel(col, row, distance);
+            if (distance < 1500) {
+                birdPixel(col + 1, row, distance);
+            }
+        }
+    }
+
+    private void birdPixel(int col, int row, double distance) {
+        if (col < 0 || col >= WIDTH || row < 0 || row >= HEIGHT) {
+            return;
+        }
+        int index = row * WIDTH + col;
+        if (distance < depth[index]) {
+            pixels[index] = mix(BIRD, HAZE, clamp((distance - 2500) / 3500));
         }
     }
 

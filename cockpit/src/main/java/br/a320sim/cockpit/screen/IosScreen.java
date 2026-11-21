@@ -19,6 +19,8 @@ import br.a320sim.host.command.ApplyPositionCommand;
 import br.a320sim.host.command.FreezeCommand;
 import br.a320sim.host.command.InstantAlignCommand;
 import br.a320sim.host.command.ResetToRunwayCommand;
+import br.a320sim.host.command.ReleaseBirdsCommand;
+import br.a320sim.host.command.SetAutoBirdsCommand;
 import br.a320sim.host.command.SetWeatherCommand;
 import br.a320sim.host.command.SendMessageCommand;
 import br.a320sim.host.command.ToggleFailureCommand;
@@ -100,6 +102,11 @@ public class IosScreen extends RetroScreen {
                 .findFirst().orElse(SetWeatherCommand.CALM);
         buttons.add(new RetroButton(338, 98, 140, 20, () -> "VENTO: " + weather.name(),
                 () -> weather.speedKt() > 0, AMBER, this::nextWeather));
+        // Aves: um bando à frente agora, ou bandos ao acaso perto dos aeroportos (desligado no começo)
+        buttons.add(new RetroButton(484, 98, 66, 20, () -> "AVES", () -> bus.getBoolean(Labels.SIM_BIRDS), AMBER,
+                () -> host.execute(new ReleaseBirdsCommand())));
+        buttons.add(new RetroButton(556, 98, 78, 20, () -> "AVES AUTO", () -> bus.getBoolean(Labels.SIM_BIRDS_AUTO),
+                AMBER, () -> host.execute(new SetAutoBirdsCommand(!bus.getBoolean(Labels.SIM_BIRDS_AUTO)))));
 
         hasDatabase = loadPositions();
         buttons.add(new RetroButton(6, 34, 100, 22,
@@ -315,6 +322,13 @@ public class IosScreen extends RetroScreen {
         }
         for (double[] p : trail) {
             d.rect(cx + (float) ((p[0] - posX) * ppn) - 1, cy + (float) ((p[1] - posY) * ppn) - 1, 2, 2, MAGENTA);
+        }
+        if (bus.getBoolean(Labels.SIM_BIRDS)) {
+            float bx = cx + (float) ((bus.getDouble(Labels.SIM_BIRDS_X, 0) - posX) * ppn);
+            float by = cy + (float) ((bus.getDouble(Labels.SIM_BIRDS_Y, 0) - posY) * ppn);
+            d.line(bx - 4, by + 3, bx, by, AMBER);
+            d.line(bx, by, bx + 4, by + 3, AMBER);
+            d.text("AVES", bx + 6, by - 6, AMBER, Align.LEFT);
         }
         d.unclip();
 

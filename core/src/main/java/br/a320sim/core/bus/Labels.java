@@ -29,6 +29,13 @@ public final class Labels {
     public static final String SIM_WIND_DIR = "SIM.WIND_DIR";
     public static final String SIM_WIND_SPD = "SIM.WIND_SPD";
     public static final String SIM_TURBULENCE = "SIM.TURBULENCE";
+    /** Bando de aves: se existe, centro (NM), altitude (ft), rumo; e se o modo automático está ligado. */
+    public static final String SIM_BIRDS = "SIM.BIRDS";
+    public static final String SIM_BIRDS_X = "SIM.BIRDS_X";
+    public static final String SIM_BIRDS_Y = "SIM.BIRDS_Y";
+    public static final String SIM_BIRDS_ALT = "SIM.BIRDS_ALT";
+    public static final String SIM_BIRDS_HDG = "SIM.BIRDS_HDG";
+    public static final String SIM_BIRDS_AUTO = "SIM.BIRDS_AUTO";
     /** Pista de destino da sessão, ex.: "SBGR 10L" (HUD e ND mostram a distância até ela). */
     public static final String SIM_DEST_RUNWAY = "SIM.DEST_RUNWAY";
     public static final String SIM_TIME = "SIM.TIME";
