@@ -46,6 +46,7 @@ O simulador varre os leitores a cada ~0,7 s; o **grupo vem do manifesto**, entã
 | `RECUSADO: ARQUIVO CORROMPIDO` | o `.jar` ou o manifesto mudou depois de assinado |
 | `RECUSADO: ARQUIVO FALTANDO` | um arquivo listado no checksum sumiu |
 | `RECUSADO: SEM CHAVE PUBLICA` | o programa foi compilado sem a chave da fábrica |
+| `RECUSADO: CARTAO BLOQUEADO` | o cartão está `BLOQUEADO` ou `PERDIDO` no cadastro de cartões (conferido depois da assinatura) |
 
 Para conferir um cartão no terminal (Git Bash ou Linux): `sha256sum -c checksum.sha256` dentro da unidade.
 
@@ -88,6 +89,7 @@ Outras opções: `-Dsim.sd.drives=G,H,I` limita a busca a essas letras; `-Dsim.s
 - `cartridges`: software das caixas
 - `host`: o "supercomputador" (rack, cartuchos, loop de simulação, falhas, comandos do instrutor)
 - `net`: comunicação TCP entre o PC do instrutor e o do aluno
+- `dados`: cadastros e histórico de treino num banco H2 embutido (JDBC puro). O `host` não depende dele: só define as interfaces (`CardPolicy`, `SessionStore`) que o `dados` implementa
 - `cockpit`: o programa gráfico em LibGDX (título, rack, boot, cockpit, estação do instrutor)
 - `sd-dev/`: pastas que fingem ser cartões SD durante o desenvolvimento (e a fonte das imagens gravadas nos cartões). Elas não têm `.jar`, então não passam pela assinatura: o software vem do próprio programa
 
@@ -96,7 +98,7 @@ Outras opções: `-Dsim.sd.drives=G,H,I` limita a busca a essas letras; `-Dsim.s
 ```
 gradlew :cockpit:run      # o simulador (escolha SOLO, INSTRUTOR ou ALUNO na tela de título)
 gradlew :host:run --console=plain   # console de texto do host
-gradlew test              # testes (física, voo com piloto automático, falhas, rede)
+gradlew test              # testes (física, voo, falhas, rede, cadastros, formulário)
 ```
 
 ### Treinando em dois PCs (instrutor + aluno)
@@ -117,8 +119,8 @@ gradlew test              # testes (física, voo com piloto automático, falhas,
 |---|---|
 | PAUSAR / CONTINUAR | congela a simulação |
 | PISTA | volta o avião à cabeceira |
-| EM VOO | 8000 ft, 250 kt, mantendo a proa |
-| NA FINAL | alinhado com a pista 15, a 5 NM e 1600 ft |
+| POS: &lt;nome&gt; | escolhe uma das posições iniciais cadastradas (cada clique passa para a próxima) |
+| IR P/ POSICAO | põe o avião na posição escolhida (no chão: cabeceira; em voo: no prolongamento da pista 15, com os sensores alinhados) |
 | ALINHAR IR | alinhamento instantâneo dos sensores |
 | CARTUCHOS | desliga o avião e volta ao rack |
 | MOTOR 1 PARADO | apaga o motor 1 (alarme ENG 1 FAIL) |
@@ -176,6 +178,33 @@ Mouse no FCU: rodinha sobre SPD/HDG/ALT/V/S ajusta (SHIFT = x10), clique em AP1 
 3. A ~145 kt, segure **S** até o nariz subir ~10°
 4. Já no ar: **G** (recolhe o trem), **V** (flaps 0), **2** (CL)
 5. Ajuste ALT e HDG no FCU e clique **AP1** (no neo, também **A/THR**)
+
+## Cadastros e histórico de treino
+
+![Formulário de posição inicial com erros de validação](docs/img/cadastro-posicoes.png)
+
+| Nova sessão | Histórico com os eventos do voo |
+|---|---|
+| ![Tela NOVA SESSAO com aluno, instrutor e posição](docs/img/nova-sessao.png) | ![Sessão gravada com nota, observação e eventos](docs/img/sessoes.png) |
+
+O simulador guarda cadastros e o histórico das aulas num banco **H2 em arquivo** (não precisa instalar nada). Em desenvolvimento ele fica em `dados/sica.mv.db` (fora do Git); `-Dsim.db=pasta/arquivo` troca o lugar. O esquema é criado e atualizado sozinho pelos scripts `dados/src/main/resources/db/V1__schema.sql`, `V2__seed.sql`... (cada um roda uma vez; a tabela `versao_esquema` guarda quais já rodaram). O seed traz 2 alunos, 2 instrutores, os 6 cartões (SD-01 a SD-06) e 3 posições.
+
+Na tela de título, **4 CADASTROS** abre:
+
+| Cadastro | Regras |
+|---|---|
+| **Pessoas** (alunos e instrutores) | nome de 3 a 40 caracteres; matrícula obrigatória e única; e-mail válido se preenchido. Quem já tem sessões não é excluído, só desativado |
+| **Cartões** SD físicos | part number obrigatório; etiqueta opcional, até 10 caracteres e única. Cartão desconhecido lido com sucesso é cadastrado sozinho (sem etiqueta, para preencher); se já existe um cadastro manual com o mesmo part number e sem identificador, ele é adotado. Cada inserção no leitor conta uma leitura (data, contador e hash do `caixas.jar`). O identificador é o número de série do volume FAT32 |
+| **Posições iniciais** | nome único de 3 a 16 caracteres; altitude 0 a 41000 ft; proa 0 a 359; distância 0 a 100 NM. **No chão** = velocidade 0 e distância 0 (a altitude vira a do campo, 2170 ft, e fica bloqueada no formulário); **em voo** = 120 a 350 kt e pelo menos 500 ft acima do campo. Posição usada em sessões não pode ser excluída |
+| **Sessões de treino** | gravadas pelo simulador: aqui só se vê (com os eventos), avalia (nota de 0 a 10 com uma casa, ou vazia) e exclui |
+
+Teclas: **N** novo, **ENTER** editar, **DEL** excluir (pede confirmação), **ESC** voltar. No formulário: **setas cima/baixo** (ou TAB) trocam de campo, **esquerda/direita** mudam as opções, **ENTER** salva, **ESC** cancela. Os erros aparecem em vermelho embaixo do campo.
+
+**Sessão de treino.** Depois de montar o rack vem a tela **NOVA SESSAO**: aluno, instrutor (só no modo INSTRUTOR) e posição inicial. Depois do boot o avião vai para a posição escolhida e a sessão começa a ser gravada: os comandos do instrutor e os eventos automáticos (**DECOLAGEM**, **POUSO V/S -620 FT/MIN**, **CRASH**, cartucho removido/carregado) vão para o banco a cada segundo, então um travamento perde no máximo o último segundo. A sessão fecha ao voltar para o rack, para o título ou ao fechar o programa, com a duração simulada, se houve crash e os cartuchos usados.
+
+**Sem banco.** Se o arquivo não abrir (ex.: outro simulador no mesmo PC já está com ele), aparece **SEM BANCO** no título e na IOS e o erro vai para o console: o simulador funciona normalmente, só não grava e não confere o cadastro de cartões. O modo ALUNO nunca abre o banco (quem grava é o PC do instrutor).
+
+Atalhos para testar sem teclado: `-Dsim.posicao="EM VOO 8000"` escolhe a posição com `-Dsim.autostart`; `-Dsim.crud=posicoes,1,editar,velocidade=90,salvar` abre um cadastro, escolhe o item, troca um campo e tenta salvar.
 
 ## Fases
 
