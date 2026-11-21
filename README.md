@@ -235,7 +235,7 @@ Na cabine, **F1** abre o MCDU (página INIT/PERF). O aluno preenche, antes de de
 | Combustível | de 1.000 a 18.700 kg; o peso de decolagem (os dois somados) não pode passar de 78.000 kg |
 | V1, VR, V2 | de 100 a 180 kt, com V1 ≤ VR ≤ V2; o MCDU mostra as velocidades sugeridas para o peso |
 
-Setas trocam de campo e de opção, **ENTER** insere, **F1** ou **ESC** fecha. Enquanto o MCDU está aberto, o teclado não pilota (o avião segue com os últimos comandos). Campos obrigatórios vazios aparecem como caixinhas âmbar, como no avião de verdade; erros em vermelho.
+Ao lado do MCDU fica um **bloco de notas** com três planos de exemplo prontos para copiar (voo curto para Guarulhos, ponte para Congonhas e um circuito em Viracopos) e dicas de preenchimento. Setas trocam de campo e de opção, **ENTER** insere, **F1** ou **ESC** fecha. Enquanto o MCDU está aberto, o teclado não pilota (o avião segue com os últimos comandos). Campos obrigatórios vazios aparecem como caixinhas âmbar, como no avião de verdade; erros em vermelho.
 
 Plano inserido:
 

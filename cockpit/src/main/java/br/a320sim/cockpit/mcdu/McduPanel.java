@@ -12,6 +12,7 @@ import com.badlogic.gdx.graphics.Color;
  * O MCDU (F1 na cabine): o aluno preenche origem, destino, cruzeiro, pesos e V1/VR/V2 antes de decolar.
  * Desenhado como a tela do MCDU: fundo preto, rótulos brancos, valores em ciano, campos vazios
  * obrigatórios como caixinhas âmbar e erros em vermelho. ENTER insere (publica o plano no barramento).
+ * Ao lado, um bloco de notas com exemplos de planos e dicas ({@link McduNotes}).
  */
 public final class McduPanel {
 
@@ -23,8 +24,14 @@ public final class McduPanel {
     private static final Color AMBER = Color.valueOf("ffb020");
     private static final Color RED = Color.valueOf("ff3a30");
     private static final Color GREY = Color.valueOf("8a909a");
+    private static final Color NOTE_PAPER = Color.valueOf("f2e8b8");
+    private static final Color NOTE_HEADER = Color.valueOf("e0cf80");
+    private static final Color NOTE_LINE = Color.valueOf("8a7a40");
+    private static final Color NOTE_INK = Color.valueOf("1e2a4a");
+    private static final Color NOTE_SOFT = Color.valueOf("6a6040");
+    private static final Color NOTE_RED = Color.valueOf("a02020");
 
-    private static final float X = 150;
+    private static final float X = 12;
     private static final float Y = 52;
     private static final float W = 340;
     private static final float H = 290;
@@ -116,5 +123,23 @@ public final class McduPanel {
             d.text(status, X + W / 2, Y + 24, statusOk ? GREEN : RED, Align.CENTER);
         }
         d.text("SETAS: campo  ESQ/DIR: opcao  ENTER: inserir  F1: fechar", X + W / 2, Y + 9, GREY, Align.CENTER);
+        notes(d);
+    }
+
+    /** Bloco de notas à direita: papel amarelado com os exemplos e as dicas. */
+    private void notes(Draw d) {
+        float nx = X + W + 14;
+        float nw = 640 - nx - 6;
+        d.rect(nx, Y, nw, H, NOTE_PAPER);
+        d.frame(nx, Y, nw, H, NOTE_LINE);
+        d.rect(nx, Y + H - 20, nw, 20, NOTE_HEADER);
+        d.text("BLOCO DE NOTAS", nx + nw / 2, Y + H - 10, NOTE_INK, Align.CENTER);
+        d.text("exemplos para copiar no MCDU", nx + nw / 2, Y + H - 30, NOTE_SOFT, Align.CENTER);
+        float y = Y + H - 46;
+        for (String line : McduNotes.lines()) {
+            boolean title = !line.isEmpty() && (Character.isDigit(line.charAt(0)) || line.equals("DICAS"));
+            d.text(line, nx + 6, y, title ? NOTE_RED : NOTE_INK, Align.LEFT);
+            y -= 11;
+        }
     }
 }
