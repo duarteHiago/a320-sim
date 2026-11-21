@@ -54,4 +54,20 @@ class AppPathsTest {
                 "/opt/sica/bin/SICA")::get, name -> null);
         assertEquals(Path.of("/home/aluno", ".sica", "sica"), linux.database());
     }
+
+    @Test
+    void screenshotsVaoParaAPastaImagensDeVerdadeMesmoNoOneDrive() {
+        Map<String, String> env = Map.of("USERPROFILE", "C:\\Users\\aluno", "APPDATA", "C:\\x");
+        AppPaths installed = new AppPaths(Map.of("user.home", "C:\\Users\\aluno",
+                AppPaths.APP_PATH_PROPERTY, "C:\\SICA\\SICA.exe")::get, env::get,
+                () -> "%USERPROFILE%\\OneDrive\\Imagens");
+        assertEquals(Path.of("C:\\Users\\aluno\\OneDrive\\Imagens\\SICA"), installed.screenshots());
+    }
+
+    @Test
+    void pastaDoProgramaFicaAoLadoDoExe() {
+        AppPaths installed = paths(Map.of("user.home", "C:\\Users\\aluno",
+                AppPaths.APP_PATH_PROPERTY, "C:\\Users\\aluno\\AppData\\Local\\SICA\\SICA.exe"));
+        assertEquals(Path.of("C:\\Users\\aluno\\AppData\\Local\\SICA"), installed.appDir());
+    }
 }

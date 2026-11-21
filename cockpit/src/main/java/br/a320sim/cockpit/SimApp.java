@@ -105,6 +105,7 @@ public class SimApp extends Game {
 
     public void startSolo() {
         mode = Mode.SOLO;
+        banco.abrir(); // antes do rack: a política de cartões (bloqueados) precisa do cadastro
         setScreen(new RackScreen(this));
     }
 
@@ -114,6 +115,7 @@ public class SimApp extends Game {
                 server = new SimServer(SimServer.DEFAULT_PORT);
             }
             mode = Mode.INSTRUCTOR;
+            banco.abrir(); // antes do rack: a política de cartões (bloqueados) precisa do cadastro
             setScreen(new RackScreen(this));
         } catch (IOException e) {
             error = "Nao consegui abrir a porta " + SimServer.DEFAULT_PORT + ": " + e.getMessage();

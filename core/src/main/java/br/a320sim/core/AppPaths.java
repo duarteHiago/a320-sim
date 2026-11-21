@@ -1,7 +1,16 @@
 package br.a320sim.core;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Onde o programa guarda e lê arquivos.
@@ -18,15 +27,29 @@ public final class AppPaths {
     public static final String APP_PATH_PROPERTY = "jpackage.app-path";
     public static final String APP_FOLDER = "SICA";
 
-    private static final AppPaths CURRENT = new AppPaths(System::getProperty, System::getenv);
+    private static final Pattern REG_PICTURES = Pattern.compile("My Pictures\\s+REG_(?:EXPAND_)?SZ\\s+(.+)");
+    private static final Pattern VARIABLE = Pattern.compile("%([^%]+)%");
+    /** Só para expandir %VARIAVEIS% na leitura do registro. */
+    private static final AppPaths CURRENT_ENV = new AppPaths(System::getProperty, System::getenv);
+    private static final AppPaths CURRENT = new AppPaths(System::getProperty, System::getenv,
+            AppPaths::windowsPicturesFolder);
 
     private final Function<String, String> properties;
     private final Function<String, String> environment;
+    private final Supplier<String> picturesFolder;
 
-    /** Para testes: propriedades e variáveis de ambiente de mentira. */
-    public AppPaths(Function<String, String> properties, Function<String, String> environment) {
+    /**
+     * Para testes: propriedades, variáveis de ambiente e a pasta Imagens do Windows (pode vir nula).
+     */
+    public AppPaths(Function<String, String> properties, Function<String, String> environment,
+                    Supplier<String> picturesFolder) {
         this.properties = properties;
         this.environment = environment;
+        this.picturesFolder = picturesFolder;
+    }
+
+    public AppPaths(Function<String, String> properties, Function<String, String> environment) {
+        this(properties, environment, () -> null);
     }
 
     public static AppPaths current() {
@@ -57,9 +80,69 @@ public final class AppPaths {
         return installed() ? userFolder("APPDATA").resolve("cache") : Path.of("cache", "cartridges");
     }
 
-    /** Screenshots (F12). */
+    /**
+     * Screenshots (F12). Instalado, na pasta Imagens de verdade do usuário (que pode estar no OneDrive),
+     * ou em ~/Pictures se não der para descobrir.
+     */
     public Path screenshots() {
-        return installed() ? home().resolve("Pictures").resolve(APP_FOLDER) : Path.of("screenshots");
+        if (!installed()) {
+            return Path.of("screenshots");
+        }
+        String pictures = expand(picturesFolder.get());
+        return (pictures == null || pictures.isBlank() ? home().resolve("Pictures") : Path.of(pictures))
+                .resolve(APP_FOLDER);
+    }
+
+    /** Troca %USERPROFILE% e afins pelo valor da variável de ambiente. */
+    private String expand(String path) {
+        if (path == null) {
+            return null;
+        }
+        Matcher m = VARIABLE.matcher(path);
+        StringBuilder result = new StringBuilder();
+        while (m.find()) {
+            String value = environment.apply(m.group(1));
+            m.appendReplacement(result, Matcher.quoteReplacement(value == null ? m.group() : value));
+        }
+        m.appendTail(result);
+        return result.toString();
+    }
+
+    /**
+     * A pasta Imagens do Windows, do registro do usuário (onde o Explorer guarda; pode ter sido movida
+     * para o OneDrive). Lida com o reg.exe do próprio Windows; nula se não der.
+     */
+    static String windowsPicturesFolder() {
+        if (!System.getProperty("os.name", "").startsWith("Windows")) {
+            return null;
+        }
+        try {
+            // Caminho completo: não confia no PATH para achar o reg.exe
+            String systemRoot = System.getenv().getOrDefault("SystemRoot", "C:\\Windows");
+            Process reg = new ProcessBuilder(Path.of(systemRoot, "System32", "reg.exe").toString(), "query",
+                    "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders",
+                    "/v", "My Pictures").redirectErrorStream(true).start();
+            String found = null;
+            try (BufferedReader out = new BufferedReader(
+                    new InputStreamReader(reg.getInputStream(), StandardCharsets.UTF_8))) {
+                for (String line = out.readLine(); line != null; line = out.readLine()) {
+                    Matcher m = REG_PICTURES.matcher(line.strip());
+                    if (m.matches()) {
+                        found = m.group(1).strip();
+                    }
+                }
+            }
+            reg.waitFor(5, TimeUnit.SECONDS);
+            // O reg.exe escreve na página de código do console: com acento o caminho pode vir estragado.
+            // Se a pasta lida não existir, melhor cair no ~/Pictures do que gravar num lugar estranho.
+            String expanded = found == null ? null : CURRENT_ENV.expand(found);
+            return expanded != null && Files.isDirectory(Path.of(expanded)) ? found : null;
+        } catch (IOException e) {
+            return null;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
     }
 
     /** As pastas que fingem ser cartões (sem cartão SD plugado). Instalado, vão junto com o programa. */
