@@ -115,7 +115,7 @@ gradlew test              # testes (física, voo, falhas, rede, cadastros, formu
 
 - **Mesmo Wi-Fi/rede:** use o IP local do instrutor (ex.: `192.168.0.15`).
 - **Casas diferentes:** os dois instalam a mesma VPN de jogos (**Radmin VPN**, **ZeroTier** ou **Tailscale**) e entram na mesma rede; use o IP que a VPN dá ao instrutor.
-- Na primeira vez, o **Firewall do Windows** do instrutor pergunta se libera o Java: permita em redes privadas. A porta usada é a **7320**.
+- Na primeira vez, o **Firewall do Windows** do instrutor pergunta se libera o programa (o `AVION.exe` instalado, ou o Java em desenvolvimento): marque **Redes privadas**. A porta usada é a **7320**.
 
 ### Estação do instrutor
 
@@ -281,6 +281,48 @@ Teclas: **N** novo, **ENTER** editar, **DEL** excluir (pede confirmação), **ES
 **Sem banco.** Se o arquivo não abrir (ex.: outro simulador no mesmo PC já está com ele), aparece **SEM BANCO** no título e na IOS e o erro vai para o console: o simulador funciona normalmente, só não grava e não confere o cadastro de cartões. O modo ALUNO nunca abre o banco (quem grava é o PC do instrutor).
 
 Atalhos para testar sem teclado: `-Dsim.posicao="EM VOO 8000"` escolhe a posição com `-Dsim.autostart`; `-Dsim.crud=posicoes,1,editar,velocidade=90,salvar` abre um cadastro, escolhe o item, troca um campo e tenta salvar.
+
+## Instalar no Windows
+
+Quem só vai usar o simulador não precisa de Java nem do Gradle: o instalador traz um Java reduzido junto.
+
+**Instalar.** Dê dois cliques em `AVION-1.0.0.exe` (ou `.msi`). A instalação é **só para o usuário atual** e não pede senha de administrador. O programa vai para `%LOCALAPPDATA%\AVION` (ex.: `C:\Users\<voce>\AppData\Local\AVION\AVION.exe`); o instalador deixa trocar a pasta. Ele cria atalhos no **Menu Iniciar** (pasta AVION) e na **Área de Trabalho**. Para desinstalar: Configurações > Aplicativos > AVION.
+
+**Aviso do SmartScreen.** O instalador não é assinado digitalmente, então na primeira vez o Windows pode mostrar "O Windows protegeu o computador". Clique em **Mais informações** e depois em **Executar assim mesmo**. Esse aviso é sobre o instalador. A **assinatura dos cartões SD** é outra coisa e continua valendo: o programa instalado só carrega um `caixas.jar` assinado com a chave do projeto e recusa os cartões bloqueados no cadastro, como em desenvolvimento.
+
+**Onde ficam os dados.** A pasta do programa só guarda o programa:
+
+| O quê | Instalado | Em desenvolvimento |
+|---|---|---|
+| Banco (cadastros e sessões) | `%APPDATA%\AVION\avion.mv.db` | `dados/avion.mv.db` |
+| Cópias dos `.jar` dos cartões | `%APPDATA%\AVION\cache` | `cache/cartridges` |
+| Screenshots (F12) | `Imagens\AVION` (a pasta Imagens de verdade, mesmo no OneDrive) | `screenshots/` |
+
+Desinstalar (ou atualizar) **não apaga** `%APPDATA%\AVION`: os cadastros e o histórico das aulas continuam lá. Para zerar, apague essa pasta à mão.
+
+**Firewall.** No PC do **instrutor**, quando o Windows perguntar, permita o `AVION.exe` em **Redes privadas** (a porta é a 7320). O PC do aluno só se conecta e não precisa liberar nada.
+
+**Atualizar.** Um instalador de versão mais nova substitui a anterior (sem duas entradas em Aplicativos) e mantém os dados.
+
+**Laboratório (vários PCs).** Instalação silenciosa, sem janelas, para cada usuário:
+
+```
+msiexec /i AVION-1.0.0.msi /qn
+msiexec /x AVION-1.0.0.msi /qn      # desinstalar
+```
+
+### Gerar o instalador
+
+```
+gradlew :cockpit:pacote                 # só o programa, sem instalar: cockpit/build/jpackage/AVION/AVION.exe
+gradlew :cockpit:instalador             # cockpit/build/jpackage/AVION-<versao>.exe
+gradlew :cockpit:instalador -Ptipo=msi  # o mesmo em .msi (bom para instalação silenciosa)
+```
+
+- **Versão:** fica num lugar só, `ext.appVersion` no `build.gradle` da raiz. `-Pversao=1.0.1` troca só naquela execução (para testar a atualização). O `--win-upgrade-uuid` em `cockpit/build.gradle` é fixo e não deve mudar: é ele que faz a versão nova substituir a antiga.
+- **JDK 21** com `jpackage` (o mesmo do toolchain do Gradle). O Java reduzido leva só os módulos usados (`java.desktop`, `java.sql`, `java.naming`, `java.management`, `jdk.unsupported`, `jdk.crypto.ec`...), por isso o instalador tem uns 40 MB.
+- **WiX Toolset 3.14** (o `pacote` não precisa dele, só o `instalador`). O Gradle procura nesta ordem: `tools/wix/` dentro do projeto (fora do Git), a variável de ambiente `WIX`, o `PATH`. O jeito mais simples: baixe o zip portátil `wix314-binaries.zip` da página de releases de [github.com/wixtoolset/wix3](https://github.com/wixtoolset/wix3/releases) e descompacte em `tools/wix/`. Se não achar, a tarefa para e explica onde colocar.
+- As pastas `sd-dev/` vão junto no programa instalado (para usar sem cartão SD).
 
 ## Fases
 
