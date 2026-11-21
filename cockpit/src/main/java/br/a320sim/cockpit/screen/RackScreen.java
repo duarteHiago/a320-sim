@@ -28,7 +28,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * "Monte seu A320": um slot por grupo, setas escolhem o cartucho de cada um.
+ * "Monte sua aeronave": um slot por grupo, setas escolhem o cartucho de cada um.
  * A validação roda ao vivo, então dá para ver na hora uma combinação incompatível.
  * <p>
  * Com cartões SD, a tela acompanha os leitores: cartão encaixado vai direto para o slot do grupo dele,
@@ -246,7 +246,7 @@ public class RackScreen extends RetroScreen {
     @Override
     protected void paint(Draw d) {
         boolean instructor = app.mode() == SimApp.Mode.INSTRUCTOR;
-        d.text(instructor ? "MONTE O A320 DO ALUNO" : "MONTE SEU A320", WIDTH / 2f, 334, YELLOW, Align.CENTER, 2);
+        d.text(instructor ? "MONTE A AERONAVE DO ALUNO" : "MONTE SUA AERONAVE", WIDTH / 2f, 334, YELLOW, Align.CENTER, 2);
         d.text(sdMode ? "encaixe um cartao em cada leitor (ou escolha com as setas)"
                 : "escolha um cartucho para cada slot", WIDTH / 2f, 310, GREY, Align.CENTER);
 
@@ -309,7 +309,7 @@ public class RackScreen extends RetroScreen {
         float sh = CART_H - 40;
         d.rect(sx, sy, sw, sh, neo ? NEO : CEO);
         d.frame(sx, sy, sw, sh, Color.BLACK);
-        d.text("AIRBUS A320", sx + sw / 2, sy + sh - 10, Color.BLACK, Align.CENTER);
+        d.text("JATO BIMOTOR", sx + sw / 2, sy + sh - 10, Color.BLACK, Align.CENTER);
         d.text(m.versao().name(), sx + sw / 2, sy + sh / 2 + 4, Color.WHITE, Align.CENTER, 3);
         d.text(m.partNumber(), sx + sw / 2, sy + 10, Color.BLACK, Align.CENTER);
         String origin = cartridge.removable() ? "LEITOR " + readerName(cartridge.location()) : "PASTA DEV";
