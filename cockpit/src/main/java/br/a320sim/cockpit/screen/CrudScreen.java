@@ -176,14 +176,21 @@ public class CrudScreen<T> extends RetroScreen {
             app.sound().play(Sfx.BACK);
         } else if (MenuInput.confirm() || Gdx.input.isKeyJustPressed(Keys.FORWARD_DEL)
                 || Gdx.input.isKeyJustPressed(Keys.DEL)) {
-            T item = confirmingDelete;
-            confirmingDelete = null;
-            try {
-                ok(adapter.excluir(item));
-                reload();
-            } catch (RegraException | DadosException e) {
-                error(e.getMessage().toUpperCase());
-            }
+            confirmDelete();
+        }
+    }
+
+    private void confirmDelete() {
+        if (confirmingDelete == null) {
+            return;
+        }
+        T item = confirmingDelete;
+        confirmingDelete = null;
+        try {
+            ok(adapter.excluir(item));
+            reload();
+        } catch (RegraException | DadosException e) {
+            error(e.getMessage().toUpperCase());
         }
     }
 
@@ -386,7 +393,7 @@ public class CrudScreen<T> extends RetroScreen {
     /**
      * Para screenshots sem teclado: {@code -Dsim.crud=posicoes,1,editar,velocidade=90,salvar}
      * escolhe o item 1, abre o formulário, troca um valor e tenta salvar (mostrando os erros).
-     * Também aceita {@code novo} e {@code excluir} (abre a confirmação).
+     * Também aceita {@code novo}, {@code excluir} (abre a confirmação) e {@code confirmar} (confirma a exclusão).
      */
     private void applyStartupShortcut() {
         String[] steps = System.getProperty("sim.crud", "").split(",");
@@ -411,6 +418,7 @@ public class CrudScreen<T> extends RetroScreen {
                 case "editar" -> openForm(current());
                 case "novo" -> openForm(null);
                 case "excluir" -> confirmingDelete = current();
+                case "confirmar" -> confirmDelete();
                 case "salvar" -> {
                     changes.forEach(this::typeInto);
                     save();

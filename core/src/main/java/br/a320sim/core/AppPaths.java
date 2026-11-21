@@ -7,8 +7,8 @@ import java.util.function.Function;
  * Onde o programa guarda e lê arquivos.
  * <p>
  * Em desenvolvimento (gradlew run), tudo é relativo à pasta do projeto, como sempre foi. Instalado
- * (pelo instalador do jpackage), a pasta do programa é só leitura: o banco vai para %APPDATA%\SICA,
- * o cache dos cartões para %LOCALAPPDATA%\SICA e os screenshots para Imagens\SICA.
+ * (pelo instalador do jpackage, em %LOCALAPPDATA%\SICA), a pasta do programa não guarda dados do usuário:
+ * o banco e o cache dos cartões vão para %APPDATA%\SICA e os screenshots para Imagens\SICA.
  * O lançador do jpackage define a propriedade {@code jpackage.app-path} (o caminho do SICA.exe):
  * é assim que o programa sabe que está instalado.
  */
@@ -52,9 +52,9 @@ public final class AppPaths {
         return installed() ? userFolder("APPDATA").resolve("sica") : Path.of("dados", "sica");
     }
 
-    /** Cópias dos .jar lidos dos cartões (data loading). */
+    /** Cópias dos .jar lidos dos cartões (data loading). Instalado, junto do banco, fora da pasta do programa. */
     public Path cartridgeCache() {
-        return installed() ? userFolder("LOCALAPPDATA").resolve("cache") : Path.of("cache", "cartridges");
+        return installed() ? userFolder("APPDATA").resolve("cache") : Path.of("cache", "cartridges");
     }
 
     /** Screenshots (F12). */
@@ -67,7 +67,7 @@ public final class AppPaths {
         return installed() ? appDir().resolve("sd-dev") : Path.of("sd-dev");
     }
 
-    /** %APPDATA%\SICA ou %LOCALAPPDATA%\SICA; sem a variável (Linux, testes), ~/.sica. */
+    /** %APPDATA%\SICA; sem a variável (Linux, testes), ~/.sica. */
     private Path userFolder(String variable) {
         String base = environment.apply(variable);
         return base == null || base.isBlank() ? home().resolve(".sica") : Path.of(base).resolve(APP_FOLDER);

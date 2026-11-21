@@ -35,7 +35,8 @@ class AppPathsTest {
                 AppPaths.APP_PATH_PROPERTY, "C:\\Users\\aluno\\AppData\\Local\\SICA\\SICA.exe"));
         assertTrue(installed.installed());
         assertEquals(Path.of("C:\\Users\\aluno\\AppData\\Roaming\\SICA\\sica"), installed.database());
-        assertEquals(Path.of("C:\\Users\\aluno\\AppData\\Local\\SICA\\cache"), installed.cartridgeCache());
+        assertEquals(Path.of("C:\\Users\\aluno\\AppData\\Roaming\\SICA\\cache"), installed.cartridgeCache(),
+                "fora da pasta do programa, que fica em %LOCALAPPDATA%\\SICA");
         assertEquals(Path.of("C:\\Users\\aluno\\Pictures\\SICA"), installed.screenshots());
         assertEquals(Path.of("C:\\Users\\aluno\\AppData\\Local\\SICA\\sd-dev"), installed.devCartridges());
     }

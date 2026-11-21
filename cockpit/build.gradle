@@ -44,6 +44,7 @@ test {
 // Instalador para Windows (jpackage, com o Java embutido; o .exe precisa do WiX Toolset 3)
 //   gradlew :cockpit:pacote      -> build/jpackage/SICA/SICA.exe (pasta pronta, sem instalar; não precisa de WiX)
 //   gradlew :cockpit:instalador  -> build/jpackage/SICA-<versão>.exe (instalador por usuário)
+//   gradlew :cockpit:instalador -Ptipo=msi -> o mesmo como .msi (instala sem cliques: msiexec /i ... /qn)
 // ---------------------------------------------------------------------------------------------
 def appName = 'SICA'
 /** Fixo para sempre: é o que faz a versão nova substituir a antiga em vez de instalar duas. */
@@ -125,8 +126,12 @@ tasks.register('instalador', Exec) {
         }
         logger.lifecycle("WiX: ${wix}")
         environment 'PATH', wix.absolutePath + File.pathSeparator + System.getenv('PATH')
-        delete jpackageDir.get().file("${appName}-${rootProject.appVersion}.exe")
-        commandLine jpackageArgs('exe') + [
+        def type = (project.findProperty('tipo') ?: 'exe').toString()
+        if (!(type in ['exe', 'msi'])) {
+            throw new GradleException("-Ptipo=${type}: use exe ou msi")
+        }
+        delete jpackageDir.get().file("${appName}-${rootProject.appVersion}.${type}")
+        commandLine jpackageArgs(type) + [
                 '--win-per-user-install',
                 '--win-menu', '--win-menu-group', appName,
                 '--win-shortcut',
