@@ -6,3 +6,14 @@ build/
 .vscode/
 cache/
 screenshots/
+chaves/
+*.key
+bin/
+
+# Banco H2 de desenvolvimento
+dados/sica*.db
+dados/avion*.db
+dados/*.trace.db
+
+# Ferramentas baixadas para gerar o instalador (WiX); fora do Git
+tools/

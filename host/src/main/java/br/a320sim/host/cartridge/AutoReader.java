@@ -1,6 +1,7 @@
 package br.a320sim.host.cartridge;
 
-import java.nio.file.Path;
+import br.a320sim.core.AppPaths;
+
 import java.util.List;
 import java.util.Locale;
 
@@ -28,7 +29,7 @@ public class AutoReader implements CartridgeReader {
 
     public static AutoReader fromSystemProperties() {
         Source source = Source.valueOf(System.getProperty("sim.cartridges", "auto").toUpperCase(Locale.ROOT));
-        return new AutoReader(new SdCardReader(), new DevFolderReader(Path.of("sd-dev")), source);
+        return new AutoReader(new SdCardReader(), new DevFolderReader(AppPaths.current().devCartridges()), source);
     }
 
     @Override

@@ -1,0 +1,20 @@
+// Cadastros e histórico de treino: banco H2 embutido (arquivo), acessado com JDBC puro.
+// O host não conhece este módulo; ele só define as interfaces (CardPolicy, SessionStore)
+// que as classes daqui implementam.
+dependencies {
+    implementation project(':core')
+    implementation project(':host')
+    implementation project(':flightmodel')
+    implementation 'com.h2database:h2:2.3.232'
+
+    testImplementation platform('org.junit:junit-bom:5.10.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    workingDir = rootProject.projectDir
+    // CardPolicyTest usa as imagens dos cartões (cartridge.json + caixas.jar)
+    dependsOn ':cartridges:sdImages'
+}

@@ -7,6 +7,7 @@ dependencies {
     implementation project(':flightmodel')
     implementation project(':host')
     implementation project(':net')
+    implementation project(':dados')
     runtimeOnly project(':cartridges')
 
     implementation "com.badlogicgames.gdx:gdx:$gdxVersion"
@@ -35,4 +36,106 @@ dependencies {
 
 test {
     useJUnitPlatform()
+    // NomesVisiveisTest lê o código de cockpit e host a partir da raiz do projeto
+    systemProperty 'sim.projectRoot', rootProject.projectDir.absolutePath
+}
+
+// ---------------------------------------------------------------------------------------------
+// Instalador para Windows (jpackage, com o Java embutido; o .exe precisa do WiX Toolset 3)
+//   gradlew :cockpit:pacote      -> build/jpackage/AVION/AVION.exe (pasta pronta, sem instalar; não precisa de WiX)
+//   gradlew :cockpit:instalador  -> build/jpackage/AVION-<versão>.exe (instalador por usuário)
+//   gradlew :cockpit:instalador -Ptipo=msi -> o mesmo como .msi (instala sem cliques: msiexec /i ... /qn)
+// ---------------------------------------------------------------------------------------------
+def appName = 'AVION'
+/** Fixo para sempre: é o que faz a versão nova substituir a antiga em vez de instalar duas. */
+def winUpgradeUuid = '9a4d404a-db55-43a5-b21f-cda3c39e5109'
+/**
+ * Módulos do Java embutido: os que o jdeps encontra (java.compiler, java.instrument e java.scripting
+ * são do H2) mais os carregados por reflexão, que o jdeps não enxerga: jdk.unsupported (LWJGL)
+ * e jdk.crypto.ec (Ed25519, a assinatura dos cartões).
+ */
+def runtimeModules = ['java.base', 'java.compiler', 'java.desktop', 'java.instrument', 'java.management',
+                      'java.naming', 'java.scripting', 'java.sql', 'jdk.net', 'jdk.unsupported', 'jdk.crypto.ec']
+def jpackageDir = layout.buildDirectory.dir('jpackage')
+def jpackageInput = layout.buildDirectory.dir('jpackage-input')
+def toolchainHome = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+        .map { it.metadata.installationPath.asFile }
+
+/** Os .jar do programa, sem as bibliotecas nativas de Linux, macOS e Windows 32 bits. */
+tasks.register('pacoteEntrada', Sync) {
+    group = 'instalador'
+    description = 'Junta os .jar que vão para o instalador'
+    from(tasks.named('jar'))
+    from(configurations.runtimeClasspath) {
+        exclude '*natives-linux*', '*natives-macos*', '*natives-windows-x86*'
+    }
+    into jpackageInput
+}
+
+/** Argumentos comuns às duas tarefas. */
+def jpackageArgs = { String type ->
+    def jar = tasks.named('jar').get()
+    [toolchainHome.get().toPath().resolve('bin/jpackage').toString(),
+     '--type', type,
+     '--name', appName,
+     '--app-version', rootProject.appVersion,
+     '--vendor', 'AVION',
+     '--description', 'Ambiente Virtual de Integracao e Operacao de Navegacao',
+     '--icon', file('packaging/icone.ico').absolutePath,
+     '--input', jpackageInput.get().asFile.absolutePath,
+     '--main-jar', jar.archiveFileName.get(),
+     '--main-class', application.mainClass.get(),
+     '--add-modules', runtimeModules.join(','),
+     '--jlink-options', '--strip-debug --no-header-files --no-man-pages',
+     // As pastas sd-dev (cartuchos sem cartão SD) vão junto, ao lado do AVION.exe
+     '--app-content', rootProject.file('sd-dev').absolutePath,
+     '--dest', jpackageDir.get().asFile.absolutePath]
+}
+
+tasks.register('pacote', Exec) {
+    group = 'instalador'
+    description = 'Gera build/jpackage/AVION (o programa com o Java embutido, sem instalar)'
+    dependsOn 'pacoteEntrada'
+    doFirst {
+        delete jpackageDir.get().dir(appName)
+        commandLine jpackageArgs('app-image')
+    }
+}
+
+/** Onde está o WiX: tools/wix, depois a variável WIX, depois o PATH. */
+def findWix = {
+    def candidates = [rootProject.file('tools/wix')]
+    def wixEnv = System.getenv('WIX')
+    if (wixEnv) {
+        candidates << new File(wixEnv, 'bin') << new File(wixEnv)
+    }
+    (System.getenv('PATH') ?: '').split(File.pathSeparator).each { candidates << new File(it) }
+    candidates.find { new File(it, 'candle.exe').isFile() && new File(it, 'light.exe').isFile() }
+}
+
+tasks.register('instalador', Exec) {
+    group = 'instalador'
+    description = 'Gera build/jpackage/AVION-<versao>.exe (instalador para Windows)'
+    dependsOn 'pacoteEntrada'
+    doFirst {
+        def wix = findWix()
+        if (wix == null) {
+            throw new GradleException('WiX Toolset 3 nao encontrado (precisa de candle.exe e light.exe).\n'
+                    + 'Baixe o zip portatil wix314-binaries.zip em https://github.com/wixtoolset/wix3/releases\n'
+                    + 'e extraia em tools/wix/ (fora do Git), ou instale o WiX 3 e defina a variavel WIX.')
+        }
+        logger.lifecycle("WiX: ${wix}")
+        environment 'PATH', wix.absolutePath + File.pathSeparator + System.getenv('PATH')
+        def type = (project.findProperty('tipo') ?: 'exe').toString()
+        if (!(type in ['exe', 'msi'])) {
+            throw new GradleException("-Ptipo=${type}: use exe ou msi")
+        }
+        delete jpackageDir.get().file("${appName}-${rootProject.appVersion}.${type}")
+        commandLine jpackageArgs(type) + [
+                '--win-per-user-install',
+                '--win-menu', '--win-menu-group', appName,
+                '--win-shortcut',
+                '--win-dir-chooser',
+                '--win-upgrade-uuid', winUpgradeUuid]
+    }
 }

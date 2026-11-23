@@ -5,15 +5,23 @@ import br.a320sim.cockpit.gfx.Draw;
 import br.a320sim.cockpit.gfx.Draw.Align;
 import br.a320sim.cockpit.gfx.RetroButton;
 import br.a320sim.cockpit.gfx.TextInput;
+import br.a320sim.cockpit.visual.Windshield;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
-import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.flightmodel.world.Airport;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 import br.a320sim.host.Host;
-import br.a320sim.host.command.FinalApproachCommand;
+import br.a320sim.cockpit.audio.Sfx;
+import br.a320sim.dados.DadosException;
+import br.a320sim.dados.modelo.Posicao;
+import br.a320sim.host.command.ApplyPositionCommand;
 import br.a320sim.host.command.FreezeCommand;
 import br.a320sim.host.command.InstantAlignCommand;
-import br.a320sim.host.command.RepositionCommand;
 import br.a320sim.host.command.ResetToRunwayCommand;
+import br.a320sim.host.command.ReleaseBirdsCommand;
+import br.a320sim.host.command.SetAutoBirdsCommand;
+import br.a320sim.host.command.SetWeatherCommand;
 import br.a320sim.host.command.SendMessageCommand;
 import br.a320sim.host.command.ToggleFailureCommand;
 import br.a320sim.host.failure.AutopilotFailure;
@@ -50,6 +58,9 @@ public class IosScreen extends RetroScreen {
     private static final Color RED = Color.valueOf("ff3a30");
     private static final Color YELLOW = Color.valueOf("ffff48");
     private static final Color MAGENTA = Color.valueOf("ff58ff");
+    private static final Color CYAN_TEXT = Color.valueOf("38e8ff");
+    /** Quantos caracteres do log cabem na coluna da direita. */
+    private static final int LOG_CHARS = 48;
 
     private static final float MAP_X = 6;
     private static final float MAP_Y = 64;
@@ -65,6 +76,12 @@ public class IosScreen extends RetroScreen {
     private final TextInput message = new TextInput("", 60);
     private final Rectangle messageField = new Rectangle(6, 6, 628, 22);
     private final String addresses;
+    /** Posições cadastradas; o botão POS alterna entre elas e IR P/ POSICAO aplica. */
+    private final List<Posicao> positions = new ArrayList<>();
+    private final boolean hasDatabase;
+    private int position;
+    /** Vento atual, escolhido entre as predefinições do botão VENTO. */
+    private SetWeatherCommand weather = SetWeatherCommand.CALM;
     private float snapshotTimer;
     private double trailTimer;
     private float time;
@@ -74,27 +91,88 @@ public class IosScreen extends RetroScreen {
         Host host = app.host();
         addresses = SimServer.localAddresses().stream().limit(2).collect(Collectors.joining("  "));
 
-        float y = 160;
+        float y = 172;
         for (Failure failure : new Failure[]{new EngineFailure(1), new SensorFailure(), new AutopilotFailure()}) {
-            buttons.add(new RetroButton(338, y, 296, 22, failure::name, () -> host.hasFailure(failure), RED,
+            buttons.add(new RetroButton(338, y, 296, 20, failure::name, () -> host.hasFailure(failure), RED,
                     () -> host.execute(new ToggleFailureCommand(failure))));
-            y -= 28;
+            y -= 24;
         }
+        // Ambiente: vento (as predefinições valem para a pista de destino); começa com o que já está valendo
+        DataBus bus = host.bus();
+        weather = SetWeatherCommand.presets(Windshield.destination(bus)).stream()
+                .filter(w -> w.speedKt() == bus.getDouble(Labels.SIM_WIND_SPD, 0)
+                        && w.fromDeg() == bus.getDouble(Labels.SIM_WIND_DIR, 0))
+                .findFirst().orElse(SetWeatherCommand.CALM);
+        buttons.add(new RetroButton(338, 98, 140, 20, () -> "VENTO: " + weather.name(),
+                () -> weather.speedKt() > 0, AMBER, this::nextWeather));
+        // Aves: um bando à frente agora, ou bandos ao acaso perto dos aeroportos (desligado no começo)
+        buttons.add(new RetroButton(484, 98, 66, 20, () -> "AVES", () -> bus.getBoolean(Labels.SIM_BIRDS), AMBER,
+                () -> host.execute(new ReleaseBirdsCommand())));
+        buttons.add(new RetroButton(556, 98, 78, 20, () -> "AVES AUTO", () -> bus.getBoolean(Labels.SIM_BIRDS_AUTO),
+                AMBER, () -> host.execute(new SetAutoBirdsCommand(!bus.getBoolean(Labels.SIM_BIRDS_AUTO)))));
 
-        String[] labels = {"PISTA", "EM VOO", "NA FINAL", "ALINHAR IR", "CARTUCHOS"};
-        Runnable[] actions = {
-                () -> host.execute(new ResetToRunwayCommand()),
-                () -> host.execute(new RepositionCommand(8000, 250)),
-                () -> host.execute(new FinalApproachCommand()),
-                () -> host.execute(new InstantAlignCommand()),
-                this::backToRack};
+        hasDatabase = loadPositions();
         buttons.add(new RetroButton(6, 34, 100, 22,
                 () -> host.bus().getBoolean(Labels.SIM_FREEZE) ? "CONTINUAR" : "PAUSAR",
                 () -> host.bus().getBoolean(Labels.SIM_FREEZE), YELLOW,
                 () -> host.execute(new FreezeCommand(!host.bus().getBoolean(Labels.SIM_FREEZE)))));
-        for (int i = 0; i < labels.length; i++) {
-            buttons.add(new RetroButton(112 + i * 105.6f, 34, 99, 22, labels[i], actions[i]));
+        buttons.add(new RetroButton(112, 34, 74, 22, "PISTA", () -> host.execute(new ResetToRunwayCommand())));
+        buttons.add(new RetroButton(192, 34, 138, 22, this::positionLabel, () -> false, Color.WHITE,
+                this::nextPosition));
+        buttons.add(new RetroButton(336, 34, 96, 22, "IR P/ POSICAO", this::goToPosition));
+        buttons.add(new RetroButton(438, 34, 96, 22, "ALINHAR IR", () -> host.execute(new InstantAlignCommand())));
+        buttons.add(new RetroButton(540, 34, 94, 22, "CARTUCHOS", this::backToRack));
+    }
+
+    /** Lê as posições do cadastro e começa na escolhida na NOVA SESSAO. */
+    private boolean loadPositions() {
+        var dados = app.banco().dados();
+        if (dados.isEmpty()) {
+            return false;
         }
+        try {
+            positions.addAll(dados.get().posicoes().listar());
+        } catch (DadosException e) {
+            System.err.println("[IOS] " + e.getMessage());
+            return false;
+        }
+        Posicao chosen = app.lastPlan().posicao();
+        for (int i = 0; chosen != null && i < positions.size(); i++) {
+            if (positions.get(i).id().equals(chosen.id())) {
+                position = i;
+            }
+        }
+        return true;
+    }
+
+    /** Próxima predefinição de vento, calculada para a pista de destino de agora. */
+    private void nextWeather() {
+        Host host = app.host();
+        List<SetWeatherCommand> presets = SetWeatherCommand.presets(Windshield.destination(host.bus()));
+        int current = presets.stream().map(SetWeatherCommand::name).toList().indexOf(weather.name());
+        weather = presets.get((current + 1) % presets.size());
+        host.execute(weather);
+    }
+
+    private String positionLabel() {
+        return positions.isEmpty() ? "POS: SEM BANCO" : "POS: " + positions.get(position).nome();
+    }
+
+    private void nextPosition() {
+        if (!positions.isEmpty()) {
+            position = (position + 1) % positions.size();
+            app.sound().play(Sfx.MOVE);
+        }
+    }
+
+    private void goToPosition() {
+        if (positions.isEmpty()) {
+            app.sound().play(Sfx.ERROR);
+            return;
+        }
+        Posicao p = positions.get(position);
+        app.host().execute(new ApplyPositionCommand(p.nome(), p.altitudeFt(), p.velocidadeKt(), p.proaGraus(),
+                p.distanciaNm(), p.destino(), p.pista()));
     }
 
     @Override
@@ -109,8 +187,7 @@ public class IosScreen extends RetroScreen {
     }
 
     private void backToRack() {
-        app.host().powerOff();
-        app.setScreen(new RackScreen(app));
+        app.showRack();
     }
 
     @Override
@@ -192,7 +269,7 @@ public class IosScreen extends RetroScreen {
         header(d);
         map(d, bus);
         mirror(d, bus);
-        d.text("FALHAS  (clique para ligar/desligar)", 338, 194, GREY, Align.LEFT);
+        d.text("FALHAS  (clique para ligar/desligar)", 338, 198, GREY, Align.LEFT);
         for (RetroButton button : buttons) {
             button.draw(d, mouse);
         }
@@ -208,6 +285,21 @@ public class IosScreen extends RetroScreen {
 
     private void header(Draw d) {
         d.text("IOS", 6, 350, YELLOW, Align.LEFT);
+        if (!hasDatabase) {
+            d.text("SEM BANCO", 36, 350, RED, Align.LEFT);
+        } else if (app.sessions().recording()) {
+            String name = app.lastPlan().aluno().nome();
+            d.text("SESSAO: " + (name.length() > 18 ? name.substring(0, 18) : name), 36, 350, GREEN, Align.LEFT);
+        }
+        // Plano de voo do aluno (MCDU): sem ele a decolagem não é bloqueada, mas o instrutor vê
+        app.host().plan().plan().ifPresentOrElse(
+                p -> d.text(p.origin() + ">" + p.destinationRunway() + " FL" + p.cruiseFl(), 206, 350, CYAN_TEXT,
+                        Align.LEFT),
+                () -> {
+                    if ((time % 1.2f) < 0.9f) {
+                        d.text("SEM PLANO", 206, 350, AMBER, Align.LEFT);
+                    }
+                });
         SimServer server = app.server();
         if (server == null) {
             d.text("SEM SERVIDOR DE REDE", 634, 350, RED, Align.RIGHT);
@@ -230,15 +322,26 @@ public class IosScreen extends RetroScreen {
         for (int ring = 5; ring <= RANGE_NM; ring += 5) {
             d.circle(cx, cy, ring * ppn, LINE);
         }
-        double rwy = Math.toRadians(FlightModel.RUNWAY_HEADING);
-        float rx = cx + (float) (-posX * ppn);
-        float ry = cy + (float) (-posY * ppn);
-        d.filled().setColor(WHITE);
-        d.filled().rectLine(rx, ry, rx + (float) (Math.sin(rwy) * 1.75 * ppn),
-                ry + (float) (Math.cos(rwy) * 1.75 * ppn), 3);
-        d.text("SBKP", rx - 6, ry + 10, GREY, Align.RIGHT);
+        // As pistas dos aeroportos no alcance do mapa, com o código de cada um
+        for (Airport airport : World.AIRPORTS) {
+            for (Runway r : airport.strips()) {
+                d.filled().setColor(WHITE);
+                d.filled().rectLine(cx + (float) ((r.xNm() - posX) * ppn), cy + (float) ((r.yNm() - posY) * ppn),
+                        cx + (float) ((r.endXNm() - posX) * ppn), cy + (float) ((r.endYNm() - posY) * ppn), 3);
+            }
+            double[] c = airport.center();
+            d.text(airport.icao(), cx + (float) ((c[0] - posX) * ppn) - 8, cy + (float) ((c[1] - posY) * ppn) + 12,
+                    GREY, Align.RIGHT);
+        }
         for (double[] p : trail) {
             d.rect(cx + (float) ((p[0] - posX) * ppn) - 1, cy + (float) ((p[1] - posY) * ppn) - 1, 2, 2, MAGENTA);
+        }
+        if (bus.getBoolean(Labels.SIM_BIRDS)) {
+            float bx = cx + (float) ((bus.getDouble(Labels.SIM_BIRDS_X, 0) - posX) * ppn);
+            float by = cy + (float) ((bus.getDouble(Labels.SIM_BIRDS_Y, 0) - posY) * ppn);
+            d.line(bx - 4, by + 3, bx, by, AMBER);
+            d.line(bx, by, bx + 4, by + 3, AMBER);
+            d.text("AVES", bx + 6, by - 6, AMBER, Align.LEFT);
         }
         d.unclip();
 
@@ -289,11 +392,12 @@ public class IosScreen extends RetroScreen {
 
     private void log(Draw d) {
         List<Host.LoggedCommand> entries = app.host().log();
-        float y = 92;
+        float y = 84;
         for (int i = Math.max(0, entries.size() - 2); i < entries.size(); i++) {
             Host.LoggedCommand entry = entries.get(i);
             int seconds = (int) entry.simTime();
-            d.text(String.format("%02d:%02d %s", seconds / 60, seconds % 60, entry.description()), 342, y, GREY,
+            String line = String.format("%02d:%02d %s", seconds / 60, seconds % 60, entry.description());
+            d.text(line.length() > LOG_CHARS ? line.substring(0, LOG_CHARS - 2) + ".." : line, 342, y, GREY,
                     Align.LEFT);
             y -= 14;
         }

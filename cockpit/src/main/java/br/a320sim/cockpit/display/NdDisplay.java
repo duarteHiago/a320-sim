@@ -5,7 +5,9 @@ import br.a320sim.cockpit.gfx.Draw.Align;
 import br.a320sim.cockpit.gfx.Theme;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
-import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.flightmodel.world.Airport;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 import com.badlogic.gdx.graphics.Color;
 
 import java.util.ArrayDeque;
@@ -19,7 +21,6 @@ public final class NdDisplay implements CockpitDisplay {
 
     private static final float RANGE_NM = 10;
     private static final float RADIUS = 78;
-    private static final double RUNWAY_LENGTH_NM = 1.75;
     private static final int TRAIL_POINTS = 80;
     private static final double TRAIL_SECONDS = 3;
 
@@ -75,12 +76,21 @@ public final class NdDisplay implements CockpitDisplay {
             float[] s = toScreen(p[0] - posX, p[1] - posY, hdg, cx, cy);
             d.rect(s[0] - 1, s[1] - 1, 2, 2, t.magenta());
         }
-        double rwy = Math.toRadians(FlightModel.RUNWAY_HEADING);
-        float[] start = toScreen(-posX, -posY, hdg, cx, cy);
-        float[] end = toScreen(Math.sin(rwy) * RUNWAY_LENGTH_NM - posX, Math.cos(rwy) * RUNWAY_LENGTH_NM - posY,
-                hdg, cx, cy);
-        d.filled().setColor(t.white());
-        d.filled().rectLine(start[0], start[1], end[0], end[1], 3);
+        // Todas as pistas do mundo que estão no alcance, com o código do aeroporto
+        for (Airport airport : World.AIRPORTS) {
+            double[] c = airport.center();
+            if (Math.hypot(c[0] - posX, c[1] - posY) > RANGE_NM * 2) {
+                continue;
+            }
+            for (Runway r : airport.strips()) {
+                float[] start = toScreen(r.xNm() - posX, r.yNm() - posY, hdg, cx, cy);
+                float[] end = toScreen(r.endXNm() - posX, r.endYNm() - posY, hdg, cx, cy);
+                d.filled().setColor(t.white());
+                d.filled().rectLine(start[0], start[1], end[0], end[1], 3);
+            }
+            float[] label = toScreen(c[0] - posX, c[1] - posY, hdg, cx, cy);
+            d.text(airport.icao(), label[0] + 12, label[1] - 8, t.cyan(), Align.LEFT);
+        }
         d.unclip();
 
         d.circle(cx, cy, RADIUS, t.white());
@@ -115,6 +125,25 @@ public final class NdDisplay implements CockpitDisplay {
         d.text(String.valueOf(Math.round(bus.getDouble(Labels.IR_GS, 0))), x + 28, y + size - 12, t.green(),
                 Align.LEFT);
         d.text(Math.round(RANGE_NM) + " NM", x + size - 6, y + 10, t.cyan(), Align.RIGHT);
+        wind(d, bus, t, hdg, x + 6, y + size - 26);
+    }
+
+    /** Vento como no A320: "238/15" e uma seta apontando para onde ele sopra, relativa à proa. */
+    private void wind(Draw d, DataBus bus, Theme t, double hdg, float x, float y) {
+        double speed = bus.getDouble(Labels.SIM_WIND_SPD, 0);
+        if (speed < 1) {
+            return;
+        }
+        double from = bus.getDouble(Labels.SIM_WIND_DIR, 0);
+        d.text(String.format("%03d/%d", Math.round(from) % 360, Math.round(speed)), x, y, t.white(), Align.LEFT);
+        double toward = Math.toRadians(from + 180 - hdg);
+        float ax = x + 8;
+        float ay = y - 16;
+        float dx = (float) Math.sin(toward) * 6;
+        float dy = (float) Math.cos(toward) * 6;
+        d.line(ax - dx, ay - dy, ax + dx, ay + dy, t.green());
+        d.triangle(ax + dx * 1.4f, ay + dy * 1.4f, ax + dx * 0.6f - dy * 0.5f, ay + dy * 0.6f + dx * 0.5f,
+                ax + dx * 0.6f + dy * 0.5f, ay + dy * 0.6f - dx * 0.5f, t.green());
     }
 
     private static float[] toScreen(double dxNm, double dyNm, double hdg, float cx, float cy) {

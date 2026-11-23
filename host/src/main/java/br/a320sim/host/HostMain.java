@@ -68,7 +68,7 @@ public class HostMain {
         System.out.println("""
 
                  ===========================================
-                   A 3 2 0   S I M   -   H O S T   v0.1
+                      A V I O N   -   H O S T   v0.1
                  ===========================================
                          __|__
                   --------(_)--------      INSIRA OS
@@ -131,6 +131,9 @@ public class HostMain {
         Cartridge cartridge;
         try {
             cartridge = library.load(manifest.get());
+        } catch (br.a320sim.core.cartridge.CartridgeRejectedException e) {
+            System.out.println("Cartão RECUSADO pelo data loader: " + e.getMessage());
+            return;
         } catch (RuntimeException e) {
             System.out.println("Cartão ilegível: " + e.getMessage());
             return;

@@ -7,10 +7,14 @@ import br.a320sim.core.cartridge.CartridgeGroup;
 import br.a320sim.core.module.AvionicsModule;
 import br.a320sim.core.module.SelfTestResult;
 import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.host.birds.Birds;
 import br.a320sim.host.command.InstructorCommand;
+import br.a320sim.host.failure.EngineFailure;
+import br.a320sim.host.plan.FlightPlanMonitor;
 import br.a320sim.host.failure.Failure;
 import br.a320sim.host.rack.Rack;
 import br.a320sim.host.rack.RackReport;
+import br.a320sim.host.session.FlightEvents;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,11 +35,15 @@ public class Host {
     private final FlightModel flightModel = new FlightModel(bus);
     private final Set<Failure> failures = new LinkedHashSet<>();
     private final List<LoggedCommand> log = new ArrayList<>();
+    private final FlightEvents flightEvents = new FlightEvents();
+    /** Semente fixa: os bandos automáticos saem sempre na mesma sequência (testes repetíveis). */
+    private final Birds birds = new Birds(20_26);
+    private final FlightPlanMonitor planMonitor = new FlightPlanMonitor();
     private boolean powered;
     private double simTime;
     private double pending;
 
-    /** Um comando do instrutor e o instante da simulação em que ele aconteceu. */
+    /** Um comando do instrutor (ou um evento do voo, como DECOLAGEM) e o instante da simulação em que aconteceu. */
     public record LoggedCommand(double simTime, String description) {
     }
 
@@ -71,8 +79,17 @@ public class Host {
             pending = 0;
             failures.clear();
             log.clear();
+            bus.publish(Labels.SIM_WIND_DIR, 0.0); // cada sessão começa sem vento
+            bus.publish(Labels.SIM_WIND_SPD, 0.0);
+            bus.publish(Labels.SIM_TURBULENCE, 0.0);
+            birds.reset(bus);
+            // Cada sessão começa sem plano de voo (o aluno preenche no MCDU)
+            bus.clear("PANEL.PLAN_");
+            bus.clear(Labels.SIM_GROSS_WEIGHT);
+            planMonitor.reset();
             bus.publish(Labels.SIM_FREEZE, false);
             flightModel.resetOnRunway();
+            flightEvents.resync(bus);
             for (AvionicsModule module : rack.modules()) {
                 module.powerUp(bus);
                 selfTests.put(module, module.selfTest());
@@ -137,11 +154,25 @@ public class Host {
 
     public void execute(InstructorCommand command) {
         command.execute(this);
+        flightEvents.resync(bus); // reposicionar não é decolar nem pousar
         log.add(new LoggedCommand(simTime, command.description()));
+    }
+
+    /** Escreve no log algo que aconteceu no voo (não é um comando). */
+    public void logEvent(String description) {
+        log.add(new LoggedCommand(simTime, description));
     }
 
     public List<LoggedCommand> log() {
         return Collections.unmodifiableList(log);
+    }
+
+    public FlightPlanMonitor plan() {
+        return planMonitor;
+    }
+
+    public Birds birds() {
+        return birds;
     }
 
     public void toggleFailure(Failure failure) {
@@ -167,7 +198,24 @@ public class Host {
                 // As falhas agem depois de cada caixa, assim quem lê o barramento depois já vê a pane
                 failures.forEach(failure -> failure.apply(bus));
             }
+            planMonitor.update(bus).forEach(this::logEvent);
             flightModel.step(TICK_SECONDS);
+            for (String event : flightEvents.update(bus)) {
+                logEvent(event);
+                if (event.equals(FlightEvents.TAKEOFF)) {
+                    planMonitor.onTakeoff().ifPresent(this::logEvent); // decolou sem plano: não bloqueia, registra
+                }
+            }
+            double birdTime = bus.getBoolean(Labels.SIM_FREEZE) ? 0 : TICK_SECONDS; // pausado, o bando para
+            birds.update(bus, birdTime).ifPresent(strike -> {
+                // O motor do lado atingido para (sem religar um que já estava parado)
+                for (int engine : strike.engines()) {
+                    if (!hasFailure(new EngineFailure(engine))) {
+                        toggleFailure(new EngineFailure(engine));
+                    }
+                }
+                logEvent(strike.description());
+            });
         }
     }
 }

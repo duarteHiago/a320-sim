@@ -2,7 +2,9 @@ package br.a320sim.cockpit.visual;
 
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
-import br.a320sim.flightmodel.FlightModel;
+import br.a320sim.flightmodel.world.Obstacles;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.utils.Disposable;
@@ -10,6 +12,7 @@ import com.badlogic.gdx.utils.Disposable;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Sistema visual: a vista pelo para-brisa, no estilo "Mode 7" dos consoles 16-bit, com alguns extras 3D.
@@ -19,6 +22,8 @@ import java.util.Arrays;
  *   <li>Por cima, objetos com altura (árvores, prédios, terminal, torre), com z-buffer.</li>
  *   <li>Por fim, as luzes: borda de pista, cabeceira, aproximação com "coelho" sequencial e PAPI.</li>
  * </ol>
+ * As pistas vêm do {@link World} (SBKP, SBGR, SBSP). Cada uma ganha taxiway paralela e, nas principais,
+ * pátio, terminal e torre; luzes de aproximação e PAPI nos dois sentidos.
  * Lê a verdade física (TRUE.*), não os sensores: lá fora continua visível mesmo com pane nos instrumentos.
  */
 public final class OutsideView implements Disposable {
@@ -37,28 +42,80 @@ public final class OutsideView implements Disposable {
     private static final double HAZE_FULL = 60_000;
     private static final float FAR = Float.MAX_VALUE;
 
-    // Pista 15 (cabeceira na origem, rumo 148°) e o que tem em volta, em coordenadas da pista
-    public static final double RUNWAY_LENGTH = 3240;
-    private static final double RUNWAY_HALF_WIDTH = 22.5;
-    private static final double RWY_SIN = Math.sin(Math.toRadians(FlightModel.RUNWAY_HEADING));
-    private static final double RWY_COS = Math.cos(Math.toRadians(FlightModel.RUNWAY_HEADING));
+    // Em volta de cada pista, em coordenadas da pista: "along" ao longo do eixo a partir da cabeceira,
+    // "across" de lado, positivo para o lado da taxiway (que muda de pista para pista)
     private static final double TAXIWAY_ACROSS = 150;
     private static final double TAXIWAY_HALF_WIDTH = 11.5;
-    private static final double[] CONNECTORS = {60, 900, 1650, 2400, 3180};
-    private static final double APRON_ALONG_MIN = 1150;
-    private static final double APRON_ALONG_MAX = 2050;
+    private static final double CONNECTOR_SPACING = 750;
+    private static final double APRON_HALF_LENGTH = 450;
     private static final double APRON_ACROSS_MIN = 175;
     private static final double APRON_ACROSS_MAX = 330;
+    /** Área do aeroporto em volta da pista (grama além do asfalto), até onde começam os prédios. */
+    private static final double AREA_BEHIND = Obstacles.CLEAR_BEHIND - 10;
+    private static final double AREA_FRONT = Obstacles.CLEAR_TERMINAL_SIDE - 10;
+    private static final double AREA_FRONT_NO_TERMINAL = Obstacles.CLEAR_TAXIWAY_SIDE - 10;
+    private static final double AREA_ENDS = 150;
     private static final double PAPI_ALONG = 420;
+
     private static final double[] PAPI_ANGLES = {3.5, 3.17, 2.83, 2.5}; // do mais perto da pista para fora
 
-    private static final double CITY_X = -9000;
-    private static final double CITY_Y = 7000;
-    private static final double CITY_RADIUS = 4000;
-    private static final double BLOCK = 160;
-    private static final double STREET = 22;
-    private static final double FIELD = 600;
-    private static final double ROAD_SPACING = 2400;
+    /**
+     * Uma pista física pronta para desenhar, em metros. {@code side} = +1 se a taxiway fica à direita
+     * (olhando da cabeceira), -1 se à esquerda: "across" já vem multiplicado por ele.
+     */
+    private record Strip(String id, double x0, double y0, double sin, double cos, double length, double halfWidth,
+                         int side, boolean main, double[] connectors) {
+
+        static Strip of(Runway r) {
+            double h = Math.toRadians(r.headingDeg());
+            double length = r.lengthM();
+            int count = Math.max(2, (int) Math.round((length - 120) / CONNECTOR_SPACING) + 1);
+            double[] connectors = new double[count];
+            for (int i = 0; i < count; i++) {
+                connectors[i] = 60 + (length - 120) * i / (count - 1);
+            }
+            return new Strip(r.id(), r.xNm() * NM, r.yNm() * NM, Math.sin(h), Math.cos(h), length, r.widthM() / 2,
+                    World.taxiwaySide(r), World.hasTerminal(r), connectors);
+        }
+
+        double along(double x, double y) {
+            return (x - x0) * sin + (y - y0) * cos;
+        }
+
+        double across(double x, double y) {
+            return ((x - x0) * cos - (y - y0) * sin) * side;
+        }
+
+        double worldX(double along, double across) {
+            return x0 + along * sin + across * side * cos;
+        }
+
+        double worldY(double along, double across) {
+            return y0 + along * cos - across * side * sin;
+        }
+
+        /** Dentro da área do aeroporto desta pista (grama, taxiway, pátio). */
+        boolean inArea(double along, double across) {
+            return along > -AREA_ENDS && along < length + AREA_ENDS && across > -AREA_BEHIND
+                    && across < (main ? AREA_FRONT : AREA_FRONT_NO_TERMINAL);
+        }
+
+        double apronMin() {
+            return length / 2 - APRON_HALF_LENGTH;
+        }
+
+        double apronMax() {
+            return length / 2 + APRON_HALF_LENGTH;
+        }
+    }
+
+    private static final List<Strip> STRIPS = World.strips().stream().map(Strip::of).toList();
+    /** Para não fazer conta de pista longe de qualquer aeroporto: raio de cada um, em metros. */
+    private static final double AIRPORT_REACH = 4_500;
+
+    // Cidades, árvores e estradas vêm do gerador compartilhado com o modelo de voo (colisão)
+    private static final double FIELD = Obstacles.FIELD;
+    private static final double ROAD_SPACING = Obstacles.ROAD_SPACING;
 
     // Nuvens: camada de cúmulos esparsos, uns 4900 ft acima do aeródromo, levada pelo vento
     private static final double CLOUD_ALT = 1500;
@@ -95,6 +152,8 @@ public final class OutsideView implements Disposable {
     private static final int STROBE = 0xffffffff;
     private static final int GREEN_LIGHT = 0x40ff60ff;
     private static final int RED_LIGHT = 0xff3030ff;
+    private static final int BIRD = 0x1c1c22ff;
+    private static final int BIRDS_PER_WING = 12;
 
     private final Pixmap pixmap = new Pixmap(WIDTH, HEIGHT, Pixmap.Format.RGBA8888);
     private final Texture texture = new Texture(pixmap);
@@ -142,6 +201,7 @@ public final class OutsideView implements Disposable {
             city();
         }
         lights(simTime);
+        birds(bus, simTime);
         cloudFog();
 
         IntBuffer buffer = pixmap.getPixels().duplicate().order(ByteOrder.BIG_ENDIAN).asIntBuffer();
@@ -321,17 +381,19 @@ public final class OutsideView implements Disposable {
     }
 
     private static int ground(double x, double y, double footprint) {
-        double along = x * RWY_SIN + y * RWY_COS;
-        double across = x * RWY_COS - y * RWY_SIN;
-        if (along > -150 && along < RUNWAY_LENGTH + 150 && across > -170 && across < 420) {
-            return airport(along, across, footprint);
+        int airport = airport(x, y, footprint);
+        if (airport != 0) {
+            return airport;
         }
-        if (Math.hypot(x - CITY_X, y - CITY_Y) < CITY_RADIUS) {
-            if (Math.floorMod((long) x, (long) BLOCK) < STREET || Math.floorMod((long) y, (long) BLOCK) < STREET) {
+        for (Obstacles.City city : Obstacles.CITIES) {
+            if (!city.contains(x, y, 0)) {
+                continue;
+            }
+            long block = (long) city.block();
+            if (Math.floorMod((long) x, block) < city.street() || Math.floorMod((long) y, block) < city.street()) {
                 return STREET_COLOR;
             }
-            return BUILDINGS[hash(Math.floorDiv((long) x, (long) BLOCK), Math.floorDiv((long) y, (long) BLOCK))
-                    % BUILDINGS.length];
+            return BUILDINGS[hash(Math.floorDiv((long) x, block), Math.floorDiv((long) y, block)) % BUILDINGS.length];
         }
         if (Math.floorMod((long) x, (long) ROAD_SPACING) < 14 || Math.floorMod((long) y, (long) ROAD_SPACING) < 14) {
             return ROAD;
@@ -364,49 +426,83 @@ public final class OutsideView implements Disposable {
         return color;
     }
 
-    private static int airport(double along, double across, double footprint) {
-        double side = Math.abs(across);
-        if (along >= 0 && along <= RUNWAY_LENGTH && side <= RUNWAY_HALF_WIDTH) {
-            return runway(along, side, footprint);
-        }
-        boolean taxiway = Math.abs(across - TAXIWAY_ACROSS) <= TAXIWAY_HALF_WIDTH && along > 30 && along < RUNWAY_LENGTH - 30;
-        boolean connector = false;
-        for (double c : CONNECTORS) {
-            if (Math.abs(along - c) <= TAXIWAY_HALF_WIDTH && across > 0 && across < TAXIWAY_ACROSS) {
-                connector = true;
-                break;
+    /**
+     * Chão de aeroporto num ponto, ou 0 se não é aeroporto. Primeiro o asfalto de qualquer pista
+     * (paralelas ficam perto uma da outra), depois taxiway e pátio, e por fim a grama.
+     */
+    private static int airport(double x, double y, double footprint) {
+        boolean near = false;
+        for (Strip s : STRIPS) {
+            double dx = x - (s.x0 + s.sin * s.length / 2);
+            double dy = y - (s.y0 + s.cos * s.length / 2);
+            if (dx * dx + dy * dy < AIRPORT_REACH * AIRPORT_REACH) {
+                near = true;
+                double along = s.along(x, y);
+                double side = Math.abs(s.across(x, y));
+                if (along >= 0 && along <= s.length && side <= s.halfWidth) {
+                    return runway(s, along, side, footprint);
+                }
             }
         }
+        if (!near) {
+            return 0;
+        }
+        boolean grass = false;
+        double grassAlong = 0;
+        double grassAcross = 0;
+        for (Strip s : STRIPS) {
+            double along = s.along(x, y);
+            double across = s.across(x, y);
+            if (!s.inArea(along, across)) {
+                continue;
+            }
+            int surface = paved(s, along, across, footprint);
+            if (surface != 0) {
+                return surface;
+            }
+            grass = true;
+            grassAlong = along;
+            grassAcross = across;
+        }
+        if (!grass) {
+            return 0;
+        }
+        int color = AIRPORT_GRASS;
+        if (footprint < 6) {
+            color = shade(color, 0.93 + 0.12 * (hash((long) Math.floor(grassAlong / 5),
+                    (long) Math.floor(grassAcross / 5)) % 100) / 100.0);
+        }
+        return color;
+    }
+
+    /** Taxiway, ligações com a pista e pátio desta pista; 0 se o ponto não é pavimento. */
+    private static int paved(Strip s, double along, double across, double footprint) {
+        boolean taxiway = Math.abs(across - TAXIWAY_ACROSS) <= TAXIWAY_HALF_WIDTH && along > 30 && along < s.length - 30;
+        double nearest = s.connectors[0];
+        for (double c : s.connectors) {
+            if (Math.abs(along - c) < Math.abs(along - nearest)) {
+                nearest = c;
+            }
+        }
+        boolean connector = Math.abs(along - nearest) <= TAXIWAY_HALF_WIDTH && across > s.halfWidth
+                && across < TAXIWAY_ACROSS;
         if (taxiway || connector) {
-            boolean centerline = taxiway ? Math.abs(across - TAXIWAY_ACROSS) < 0.6 : Math.abs(along - nearest(along)) < 0.6;
+            boolean centerline = taxiway ? Math.abs(across - TAXIWAY_ACROSS) < 0.6 : Math.abs(along - nearest) < 0.6;
             return centerline && footprint < 4 ? TAXI_LINE : TAXIWAY;
         }
-        if (along > APRON_ALONG_MIN && along < APRON_ALONG_MAX && across > APRON_ACROSS_MIN && across < APRON_ACROSS_MAX) {
+        if (s.main && along > s.apronMin() && along < s.apronMax() && across > APRON_ACROSS_MIN
+                && across < APRON_ACROSS_MAX) {
             boolean joint = footprint < 3 && (Math.floorMod((long) along, 25) < 1 || Math.floorMod((long) across, 25) < 1);
             return joint ? shade(CONCRETE, 0.85) : CONCRETE;
         }
-        int grass = AIRPORT_GRASS;
-        if (footprint < 6) {
-            grass = shade(grass, 0.93 + 0.12 * (hash((long) Math.floor(along / 5), (long) Math.floor(across / 5)) % 100) / 100.0);
-        }
-        return grass;
-    }
-
-    private static double nearest(double along) {
-        double best = CONNECTORS[0];
-        for (double c : CONNECTORS) {
-            if (Math.abs(along - c) < Math.abs(along - best)) {
-                best = c;
-            }
-        }
-        return best;
+        return 0;
     }
 
     /** Marcações da pista: bordas, faixas de cabeceira, zona de toque, ponto de visada, linha central e marcas de pneu. */
-    private static int runway(double along, double across, double footprint) {
-        double fromEnd = Math.min(along, RUNWAY_LENGTH - along);
-        boolean edge = across > RUNWAY_HALF_WIDTH - 1.2;
-        boolean threshold = fromEnd < 45 && across < RUNWAY_HALF_WIDTH - 3 && Math.floorMod((long) (across * 10), 36) < 18;
+    private static int runway(Strip s, double along, double across, double footprint) {
+        double fromEnd = Math.min(along, s.length - along);
+        boolean edge = across > s.halfWidth - 1.2;
+        boolean threshold = fromEnd < 45 && across < s.halfWidth - 3 && Math.floorMod((long) (across * 10), 36) < 18;
         boolean aimingPoint = fromEnd > 400 && fromEnd < 460 && across > 5 && across < 10;
         boolean touchdown = fromEnd > 150 && fromEnd < 900 && Math.floorMod((long) fromEnd, 150) < 22
                 && across > 3.5 && across < 3.5 + 1.8 * (1 + (fromEnd < 300 ? 2 : fromEnd < 600 ? 1 : 0));
@@ -430,105 +526,77 @@ public final class OutsideView implements Disposable {
     /** Árvores perto do avião: muitas nas divisas das plantações (cercas vivas), algumas soltas no meio. */
     private void trees() {
         double radius = 1800;
-        double cell = 55;
+        double cell = Obstacles.TREE_CELL;
         long minX = Math.floorDiv((long) (camX - radius), (long) cell);
         long maxX = Math.floorDiv((long) (camX + radius), (long) cell);
         long minY = Math.floorDiv((long) (camY - radius), (long) cell);
         long maxY = Math.floorDiv((long) (camY + radius), (long) cell);
         for (long cx = minX; cx <= maxX; cx++) {
             for (long cy = minY; cy <= maxY; cy++) {
-                int h = hash(cx * 31 + 7, cy * 17 + 3);
-                double x = cx * cell + (h % 37);
-                double y = cy * cell + ((h / 37) % 37);
                 // Frente da câmera apenas (barato descartar antes de qualquer outra conta)
-                if ((x - camX) * fx + (y - camY) * fy < 0) {
+                double ax = cx * cell + cell / 2;
+                double ay = cy * cell + cell / 2;
+                if ((ax - camX) * fx + (ay - camY) * fy < -cell) {
                     continue;
                 }
-                boolean hedge = Math.floorMod((long) x, (long) FIELD) < cell || Math.floorMod((long) y, (long) FIELD) < cell;
-                if (h % 100 >= (hedge ? 70 : 6) || !isFarmland(x, y)) {
-                    continue;
-                }
-                double height = 7 + (h % 9);
-                double halfWidth = 2.5 + (h % 4);
-                billboard(x, y, 0, height, halfWidth, TREES[(h / 7) % TREES.length]);
+                Obstacles.tree(cx, cy).ifPresent(t ->
+                        billboard(t.x(), t.y(), 0, t.height(), t.halfWidth(), TREES[t.variant() % TREES.length]));
             }
         }
     }
 
-    private static boolean isFarmland(double x, double y) {
-        double along = x * RWY_SIN + y * RWY_COS;
-        double across = x * RWY_COS - y * RWY_SIN;
-        if (along > -400 && along < RUNWAY_LENGTH + 400 && across > -300 && across < 550) {
-            return false;
-        }
-        if (along < 0 && along > -1200 && Math.abs(across) < 120) {
-            return false; // área livre das luzes de aproximação
-        }
-        if (Math.hypot(x - CITY_X, y - CITY_Y) < CITY_RADIUS + 100) {
-            return false;
-        }
-        return Math.floorMod((long) x, (long) ROAD_SPACING) > 30 && Math.floorMod((long) y, (long) ROAD_SPACING) > 30;
-    }
-
-    /** Terminal, hangar e torre ao lado do pátio. */
+    /** Terminal, hangar e torre ao lado do pátio de cada pista principal (só os que estão perto). */
     private void airportBuildings() {
-        box(APRON_ALONG_MIN + 80, APRON_ACROSS_MAX + 15, APRON_ALONG_MAX - 80, APRON_ACROSS_MAX + 55, 16, 0xb8b4aaff);
-        box(APRON_ALONG_MAX + 60, APRON_ACROSS_MIN + 20, APRON_ALONG_MAX + 160, APRON_ACROSS_MIN + 90, 22, 0x9aa2acff);
-        double towerAlong = APRON_ALONG_MIN - 60;
-        double towerAcross = APRON_ACROSS_MAX + 20;
-        box(towerAlong - 4, towerAcross - 4, towerAlong + 4, towerAcross + 4, 38, 0xc8c4bcff);
-        box(towerAlong - 8, towerAcross - 8, towerAlong + 8, towerAcross + 8, 46, 0x30404cff, 38);
+        for (Strip s : STRIPS) {
+            if (!s.main || Math.hypot(s.x0 - camX, s.y0 - camY) > 12_000) {
+                continue;
+            }
+            double min = s.apronMin();
+            double max = s.apronMax();
+            box(s, min + 80, APRON_ACROSS_MAX + 15, max - 80, APRON_ACROSS_MAX + 55, 16, 0xb8b4aaff, 0);
+            box(s, max + 60, APRON_ACROSS_MIN + 20, max + 160, APRON_ACROSS_MIN + 90, 22, 0x9aa2acff, 0);
+            double towerAlong = min - 60;
+            double towerAcross = APRON_ACROSS_MAX + 20;
+            box(s, towerAlong - 4, towerAcross - 4, towerAlong + 4, towerAcross + 4, 38, 0xc8c4bcff, 0);
+            box(s, towerAlong - 8, towerAcross - 8, towerAlong + 8, towerAcross + 8, 46, 0x30404cff, 38);
+        }
     }
 
-    /** Prédios da cidade, mais altos no centro. Só os que estão na frente e a menos de 9 km. */
+    /** Prédios das cidades, mais altos no centro. Só os que estão na frente e a menos de 9 km. */
     private void city() {
         double reach = 9000;
-        double toCity = Math.hypot(CITY_X - camX, CITY_Y - camY);
-        if (toCity - CITY_RADIUS > reach) {
-            return;
-        }
-        long min = Math.floorDiv((long) -CITY_RADIUS, (long) BLOCK);
-        long max = Math.floorDiv((long) CITY_RADIUS, (long) BLOCK);
-        long baseX = Math.floorDiv((long) CITY_X, (long) BLOCK);
-        long baseY = Math.floorDiv((long) CITY_Y, (long) BLOCK);
-        for (long bx = baseX + min; bx <= baseX + max; bx++) {
-            for (long by = baseY + min; by <= baseY + max; by++) {
-                double x0 = bx * BLOCK + STREET;
-                double y0 = by * BLOCK + STREET;
-                double cx = x0 + (BLOCK - STREET) / 2, cy = y0 + (BLOCK - STREET) / 2;
-                double fromCenter = Math.hypot(cx - CITY_X, cy - CITY_Y);
-                if (fromCenter > CITY_RADIUS - 80) {
-                    continue;
+        for (Obstacles.City city : Obstacles.CITIES) {
+            if (Math.hypot(city.x() - camX, city.y() - camY) - city.radius() > reach) {
+                continue;
+            }
+            long block = (long) city.block();
+            long minX = Math.floorDiv((long) Math.max(city.x() - city.radius(), camX - reach), block);
+            long maxX = Math.floorDiv((long) Math.min(city.x() + city.radius(), camX + reach), block);
+            long minY = Math.floorDiv((long) Math.max(city.y() - city.radius(), camY - reach), block);
+            long maxY = Math.floorDiv((long) Math.min(city.y() + city.radius(), camY + reach), block);
+            for (long bx = minX; bx <= maxX; bx++) {
+                for (long by = minY; by <= maxY; by++) {
+                    double dx = (bx + 0.5) * block - camX;
+                    double dy = (by + 0.5) * block - camY;
+                    if (dx * fx + dy * fy < -200 || Math.hypot(dx, dy) > reach) {
+                        continue;
+                    }
+                    int color = BUILDINGS[hash(bx, by) % BUILDINGS.length];
+                    Obstacles.building(city, bx, by).ifPresent(b -> worldBox(b.x0(), b.y0(), b.x1(), b.y1(),
+                            b.height(), color, 0));
                 }
-                double dx = cx - camX, dy = cy - camY;
-                if (dx * fx + dy * fy < -200 || Math.hypot(dx, dy) > reach) {
-                    continue;
-                }
-                int h = hash(bx, by);
-                if (h % 10 == 0) {
-                    continue; // praça
-                }
-                double centrality = 1 - fromCenter / CITY_RADIUS;
-                double height = 8 + (h % 20) + centrality * centrality * (h % 90);
-                double inset = 6 + (h % 25);
-                double size = BLOCK - STREET;
-                worldBox(x0 + inset, y0 + inset, x0 + size - inset, y0 + size - inset, height,
-                        BUILDINGS[h % BUILDINGS.length], 0);
             }
         }
     }
 
-    /** Caixa em coordenadas da pista (along, across). */
-    private void box(double a0, double c0, double a1, double c1, double height, int color) {
-        box(a0, c0, a1, c1, height, color, 0);
-    }
-
-    private void box(double a0, double c0, double a1, double c1, double top, int color, double bottom) {
+    /** Caixa em coordenadas de uma pista (along, across). */
+    private void box(Strip s, double a0, double c0, double a1, double c1, double top, int color, double bottom) {
         double[][] corners = {{a0, c0}, {a1, c0}, {a1, c1}, {a0, c1}};
-        double[] xs = new double[4], ys = new double[4];
+        double[] xs = new double[4];
+        double[] ys = new double[4];
         for (int i = 0; i < 4; i++) {
-            xs[i] = corners[i][0] * RWY_SIN + corners[i][1] * RWY_COS;
-            ys[i] = corners[i][0] * RWY_COS - corners[i][1] * RWY_SIN;
+            xs[i] = s.worldX(corners[i][0], corners[i][1]);
+            ys[i] = s.worldY(corners[i][0], corners[i][1]);
         }
         prism(xs, ys, bottom, top, color);
     }
@@ -638,45 +706,126 @@ public final class OutsideView implements Disposable {
     // ------------------------------------------------------------------ luzes
 
     private void lights(double simTime) {
-        // Borda da pista, a cada 60 m dos dois lados
-        for (double a = 0; a <= RUNWAY_LENGTH; a += 60) {
-            light(a, -RUNWAY_HALF_WIDTH - 1.5, EDGE_LIGHT, false);
-            light(a, RUNWAY_HALF_WIDTH + 1.5, EDGE_LIGHT, false);
-        }
-        // Cabeceira verde (quem pousa na 15 vê) e fim de pista vermelho
-        for (double c = -RUNWAY_HALF_WIDTH; c <= RUNWAY_HALF_WIDTH; c += 3) {
-            light(-2, c, GREEN_LIGHT, false);
-            light(RUNWAY_LENGTH + 2, c, RED_LIGHT, false);
-        }
-        // Luzes de aproximação: barras a cada 30 m até 900 m antes da pista, barra transversal a 300 m,
-        // e o "coelho": um strobe que corre de fora para dentro duas vezes por segundo, apontando a pista
-        int bars = 30;
-        int rabbit = (int) ((simTime * 2 % 1) * bars);
-        for (int i = 0; i < bars; i++) {
-            double a = -900 + i * 30;
-            for (int k = -2; k <= 2; k++) {
-                light(a, k * 2.2, APPROACH_LIGHT, false);
+        for (Strip s : STRIPS) {
+            if (Math.hypot(s.x0 - camX, s.y0 - camY) > 30_000) {
+                continue;
             }
-            if (i == rabbit) {
-                light(a, 0, STROBE, true);
+            // Borda da pista, a cada 60 m dos dois lados
+            for (double a = 0; a <= s.length; a += 60) {
+                light(s, a, -s.halfWidth - 1.5, EDGE_LIGHT, false);
+                light(s, a, s.halfWidth + 1.5, EDGE_LIGHT, false);
             }
-        }
-        for (double c = -15; c <= 15; c += 2.5) {
-            light(-300, c, APPROACH_LIGHT, false);
-        }
-        // PAPI à esquerda: 4 luzes que ficam brancas acima do seu ângulo; na rampa certa, 2 brancas e 2 vermelhas
-        for (int i = 0; i < PAPI_ANGLES.length; i++) {
-            double across = -(RUNWAY_HALF_WIDTH + 15 + i * 9);
-            double x = PAPI_ALONG * RWY_SIN + across * RWY_COS;
-            double y = PAPI_ALONG * RWY_COS - across * RWY_SIN;
-            double angle = Math.toDegrees(Math.atan2(camZ - 1, Math.hypot(camX - x, camY - y)));
-            light(PAPI_ALONG, across, angle > PAPI_ANGLES[i] ? STROBE : RED_LIGHT, true);
+            // Cabeceira, aproximação e PAPI nos dois sentidos
+            endLights(s, false, simTime);
+            endLights(s, true, simTime);
         }
     }
 
-    private void light(double along, double across, int color, boolean bright) {
-        double x = along * RWY_SIN + across * RWY_COS;
-        double y = along * RWY_COS - across * RWY_SIN;
+    /**
+     * Uma cabeceira: barra verde (quem pousa vê) e vermelha no fim da pista; luzes de aproximação a cada 30 m
+     * até 900 m antes, barra transversal a 300 m e o "coelho", um strobe que corre de fora para dentro duas
+     * vezes por segundo; PAPI à esquerda de quem pousa, 4 luzes que ficam brancas acima do seu ângulo
+     * (na rampa certa, 2 brancas e 2 vermelhas). {@code reverse}: a cabeceira do outro sentido.
+     */
+    private void endLights(Strip s, boolean reverse, double simTime) {
+        double dir = reverse ? -1 : 1;
+        double origin = reverse ? s.length : 0;
+        // "across" da pista para quem pousa por esta cabeceira: no outro sentido, direita e esquerda trocam
+        double rightToAcross = dir * s.side;
+        for (double c = -s.halfWidth; c <= s.halfWidth; c += 3) {
+            light(s, origin - dir * 2, c, GREEN_LIGHT, false);
+            light(s, origin + dir * (s.length + 2), c, RED_LIGHT, false);
+        }
+        int bars = 30;
+        int rabbit = (int) ((simTime * 2 % 1) * bars);
+        for (int i = 0; i < bars; i++) {
+            double a = origin - dir * (900 - i * 30);
+            for (int k = -2; k <= 2; k++) {
+                light(s, a, k * 2.2, APPROACH_LIGHT, false);
+            }
+            if (i == rabbit) {
+                light(s, a, 0, STROBE, true);
+            }
+        }
+        for (double c = -15; c <= 15; c += 2.5) {
+            light(s, origin - dir * 300, c, APPROACH_LIGHT, false);
+        }
+        for (int i = 0; i < PAPI_ANGLES.length; i++) {
+            double along = origin + dir * PAPI_ALONG;
+            double across = -(s.halfWidth + 15 + i * 9) * rightToAcross;
+            double x = s.worldX(along, across);
+            double y = s.worldY(along, across);
+            double angle = Math.toDegrees(Math.atan2(camZ - 1, Math.hypot(camX - x, camY - y)));
+            light(s, along, across, angle > PAPI_ANGLES[i] ? STROBE : RED_LIGHT, true);
+        }
+    }
+
+    /**
+     * Bando de aves em V, batendo asa. Cada ave é um pontinho escuro de longe e um "v" de perto
+     * (exageradas de propósito: do tamanho real, só apareceriam em cima do avião).
+     */
+    private void birds(DataBus bus, double simTime) {
+        if (!bus.getBoolean(Labels.SIM_BIRDS)) {
+            return;
+        }
+        double fx0 = bus.getDouble(Labels.SIM_BIRDS_X, 0) * NM;
+        double fy0 = bus.getDouble(Labels.SIM_BIRDS_Y, 0) * NM;
+        // Altura do bando no referencial da câmera (que conta a partir do chão embaixo do avião)
+        double fz0 = camZ + (bus.getDouble(Labels.SIM_BIRDS_ALT, 0) - bus.getDouble(Labels.TRUE_ALT, 0)) * FT;
+        double h = Math.toRadians(bus.getDouble(Labels.SIM_BIRDS_HDG, 0));
+        double ax = Math.sin(h), ay = Math.cos(h);
+        double sx = Math.cos(h), sy = -Math.sin(h);
+        for (int i = 0; i < BIRDS_PER_WING * 2 + 1; i++) {
+            int rank = (i + 1) / 2;
+            int side = i % 2 == 0 ? 1 : -1;
+            int jitter = hash(i, 77);
+            double back = rank * 12 + jitter % 5;
+            double lateral = side * (rank * 9 + jitter % 4);
+            double up = (jitter % 7) - 3;
+            boolean wingsUp = Math.sin(simTime * 9 + i * 1.7) > 0;
+            bird(fx0 - ax * back + sx * lateral, fy0 - ay * back + sy * lateral, fz0 + up, wingsUp);
+        }
+    }
+
+    private void bird(double x, double y, double z, boolean wingsUp) {
+        if (!project(x, y, z)) {
+            return;
+        }
+        double distance = projected[2];
+        if (distance > 6000) {
+            return;
+        }
+        int col = (int) Math.floor(projected[0]);
+        int row = (int) Math.floor(projected[1]);
+        if (distance < 400) {
+            // "v" de 5 pixels: as pontas das asas sobem e descem
+            int tip = wingsUp ? -1 : 0;
+            birdPixel(col - 2, row + tip, distance);
+            birdPixel(col - 1, row, distance);
+            birdPixel(col, row + 1, distance);
+            birdPixel(col + 1, row, distance);
+            birdPixel(col + 2, row + tip, distance);
+        } else {
+            birdPixel(col, row, distance);
+            if (distance < 1500) {
+                birdPixel(col + 1, row, distance);
+            }
+        }
+    }
+
+    private void birdPixel(int col, int row, double distance) {
+        if (col < 0 || col >= WIDTH || row < 0 || row >= HEIGHT) {
+            return;
+        }
+        int index = row * WIDTH + col;
+        if (distance < depth[index]) {
+            pixels[index] = mix(BIRD, HAZE, clamp((distance - 2500) / 3500));
+        }
+    }
+
+    private void light(Strip s, double along, double across, int color, boolean bright) {
+        double x = s.worldX(along, across);
+        double y = s.worldY(along, across);
         if (!project(x, y, 0.8)) {
             return;
         }
@@ -720,11 +869,7 @@ public final class OutsideView implements Disposable {
     }
 
     private static int hash(long a, long b) {
-        long h = a * 73_856_093L ^ b * 19_349_663L;
-        h ^= h >>> 13;
-        h *= 0x5bd1e995L;
-        h ^= h >>> 15;
-        return (int) Math.floorMod(h, 1_000_003L);
+        return Obstacles.hash(a, b);
     }
 
     private static int shade(int color, double factor) {

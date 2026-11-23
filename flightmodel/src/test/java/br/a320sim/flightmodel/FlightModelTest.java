@@ -63,4 +63,31 @@ class FlightModelTest {
         assertEquals(0, bus.getDouble(Labels.TRUE_VS, 999), 1500);
         assertEquals(10_000, bus.getDouble(Labels.TRUE_ALT, 0), 300);
     }
+
+    /** Distância (m) de corrida até sair do chão com TOGA, girando a 140 kt. */
+    private static double takeoffRun(Double grossWeight) {
+        DataBus bus = new DataBus();
+        FlightModel model = new FlightModel(bus);
+        if (grossWeight != null) {
+            bus.publish(Labels.SIM_GROSS_WEIGHT, grossWeight);
+        }
+        bus.publish(Labels.ENG1_N1, 100.0);
+        bus.publish(Labels.ENG2_N1, 100.0);
+        bus.publish(Labels.CTL_FLAPS, 1);
+        for (int i = 0; i < 120 / DT && model.isOnGround(); i++) {
+            boolean rotate = bus.getDouble(Labels.TRUE_IAS, 0) > 140 && bus.getDouble(Labels.TRUE_PITCH, 0) < 12;
+            bus.publish(Labels.FCTL_PITCH_RATE, rotate ? 3.0 : 0.0);
+            model.step(DT);
+        }
+        assertFalse(model.isOnGround());
+        return Math.hypot(bus.getDouble(Labels.TRUE_POS_X, 0), bus.getDouble(Labels.TRUE_POS_Y, 0)) * 1852;
+    }
+
+    @Test
+    void aviaoMaisPesadoPrecisaDeMaisPista() {
+        double light = takeoffRun(55_000.0);
+        double standard = takeoffRun(null);
+        double heavy = takeoffRun(77_000.0);
+        assertTrue(light < standard && standard < heavy, light + " < " + standard + " < " + heavy);
+    }
 }

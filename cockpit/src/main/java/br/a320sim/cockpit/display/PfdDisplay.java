@@ -134,10 +134,32 @@ public final class PfdDisplay implements CockpitDisplay {
             }
         }
         d.unclip();
+        speedBugs(d, bus, t, tx, ty, tw, th, cy, center);
 
         d.rect(tx, cy - 8, tw - 2, 16, Color.BLACK);
         d.frame(tx, cy - 8, tw - 2, 16, t.yellow());
         d.text(String.valueOf(Math.round(ias)), tx + tw - 6, cy, t.green(), Align.RIGHT);
+    }
+
+    /**
+     * V1, VR e V2 do plano de voo (MCDU) em ciano: um traço na escala e "1", "R" e "2" logo à direita da fita
+     * (como no A320, fora da caixa do velocímetro), até 1500 ft do chão.
+     */
+    private void speedBugs(Draw d, DataBus bus, Theme t, float tx, float ty, float tw, float th, float cy,
+                           double center) {
+        if (!bus.getBoolean(Labels.PANEL_PLAN_OK) || bus.getDouble(Labels.SIM_RADIO_ALT, 0) > 1500) {
+            return;
+        }
+        String[] marks = {"1", "R", "2"};
+        String[] labels = {Labels.PANEL_PLAN_V1, Labels.PANEL_PLAN_VR, Labels.PANEL_PLAN_V2};
+        for (int i = 0; i < marks.length; i++) {
+            float y = cy + (float) (bus.getDouble(labels[i], 0) - center) * SPEED_PX;
+            if (y < ty + 4 || y > ty + th - 4) {
+                continue; // fora da parte visível da fita
+            }
+            d.line(tx + tw - 6, y, tx + tw + 2, y, t.cyan());
+            d.text(marks[i], tx + tw + 4, y, t.cyan(), Align.LEFT);
+        }
     }
 
     private void altitudeTape(Draw d, DataBus bus, Theme t, float tx, float ty, float tw, float th, float cy) {

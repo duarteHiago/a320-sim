@@ -4,6 +4,8 @@ import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
 import br.a320sim.core.cartridge.Cartridge;
 import br.a320sim.core.cartridge.CartridgeGroup;
+import br.a320sim.core.cartridge.CartridgeRejectedException;
+import br.a320sim.core.cartridge.CartridgeSignature;
 import br.a320sim.core.module.AvionicsModule;
 import br.a320sim.host.cartridge.AutoReader;
 import br.a320sim.host.cartridge.CartridgeLibrary;
@@ -23,6 +25,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.security.KeyPair;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
@@ -30,13 +34,18 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Cartões SD simulados: cada pasta temporária faz papel da raiz de um cartão num leitor,
  * com as imagens geradas por :cartridges:sdImages (cartridge.json + caixas.jar).
+ * Cada cartão é assinado aqui com uma chave de teste, então o teste não depende da chave da equipe.
  */
 class SdCartridgeTest {
+
+    /** "Fábrica" dos testes; a chave de verdade da equipe nunca é usada aqui. */
+    private static final KeyPair FACTORY = CartridgeSignature.generateKeyPair();
 
     private static final Path IMAGES = Path.of(System.getProperty("sim.test.sdImages", "cartridges/build/sd"));
 
@@ -57,7 +66,7 @@ class SdCartridgeTest {
         }
         jars = new JarCartridgeLoader(temp.resolve("cache"));
         library = new CartridgeLibrary(new SdCardReader(() -> readers),
-                new CartridgeLoader(new ClasspathModuleFactory(), jars));
+                new CartridgeLoader(new ClasspathModuleFactory(), jars, FACTORY.getPublic()));
     }
 
     @AfterEach
@@ -67,12 +76,19 @@ class SdCartridgeTest {
     }
 
     private void insertCard(String partNumber, int reader) throws IOException {
+        insertCard(partNumber, reader, FACTORY);
+    }
+
+    /** Copia a imagem para o "leitor" e assina com a chave dada (simula a gravação na fábrica). */
+    private void insertCard(String partNumber, int reader, KeyPair signer) throws IOException {
         Path image = IMAGES.resolve(partNumber);
+        Path card = readers.get(reader);
         try (Stream<Path> files = Files.list(image)) {
             for (Path file : files.toList()) {
-                Files.copy(file, readers.get(reader).resolve(file.getFileName()));
+                Files.copy(file, card.resolve(file.getFileName()));
             }
         }
+        CartridgeSignature.sign(card, signer.getPrivate(), "cartridge.json", "caixas.jar");
     }
 
     private void pullCard(int reader) throws IOException {
@@ -169,5 +185,48 @@ class SdCartridgeTest {
 
         insertCard("PLT-A320-NEO", 1);
         assertEquals(List.of("PLT-A320-NEO"), auto.scan().stream().map(DetectedCartridge::partNumber).toList());
+    }
+
+    @Test
+    void cardWithoutSignatureIsRefusedBeforeAnyCodeRuns() throws IOException {
+        insertCard("PLT-A320-CEO", 0);
+        Files.delete(readers.get(0).resolve(CartridgeSignature.SIGNATURE_FILE));
+        DetectedCartridge detected = library.rescan().get(0);
+        CartridgeRejectedException e = assertThrows(CartridgeRejectedException.class, () -> library.load(detected));
+        assertEquals(CartridgeRejectedException.Reason.SEM_ASSINATURA, e.reason());
+        assertFalse(Files.exists(temp.resolve("cache")), "nada do cartão pode ter sido copiado para o cache");
+    }
+
+    @Test
+    void cardSignedWithAnotherKeyIsRefused() throws IOException {
+        insertCard("PLT-A320-CEO", 0, CartridgeSignature.generateKeyPair()); // "pirata"
+        DetectedCartridge detected = library.rescan().get(0);
+        CartridgeRejectedException e = assertThrows(CartridgeRejectedException.class, () -> library.load(detected));
+        assertEquals(CartridgeRejectedException.Reason.ASSINATURA_INVALIDA, e.reason());
+    }
+
+    @Test
+    void jarChangedAfterSigningIsRefused() throws IOException {
+        insertCard("PLT-A320-CEO", 0);
+        Files.write(readers.get(0).resolve("caixas.jar"), new byte[]{0}, StandardOpenOption.APPEND);
+        DetectedCartridge detected = library.rescan().get(0);
+        CartridgeRejectedException e = assertThrows(CartridgeRejectedException.class, () -> library.load(detected));
+        assertEquals(CartridgeRejectedException.Reason.ARQUIVO_CORROMPIDO, e.reason());
+    }
+
+    @Test
+    void unsignedCardPluggedInFlightIsRefusedAndTheSlotStaysEmpty() throws IOException {
+        bootNeo();
+        HotPlug hotPlug = new HotPlug(host, library);
+        hotPlug.update();
+        pullCard(0);
+        library.rescan();
+        hotPlug.update();
+
+        insertCard("CKP-A320-NEO", 0);
+        Files.delete(readers.get(0).resolve(CartridgeSignature.SIGNATURE_FILE));
+        library.rescan();
+        assertEquals(List.of("CARTUCHO CKP-A320-NEO RECUSADO: SEM ASSINATURA"), hotPlug.update());
+        assertTrue(host.rack().slot(CartridgeGroup.COCKPIT).isEmpty());
     }
 }

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#13315C"/><stop offset="1" stop-color="#0B2545"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F4F8FB"/><stop offset="1" stop-color="#D6E4EE"/>
+    </linearGradient>
+    <linearGradient id="jet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3FA7D6"/><stop offset="1" stop-color="#1F6F9E"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#bg)"/>
+  <!-- trilhas de circuito -->
+  <g stroke="#2E86AB" stroke-width="6" stroke-linecap="round" fill="none" opacity=".55">
+    <path d="M96 150 H130"/><circle cx="88" cy="150" r="8"/>
+    <path d="M96 250 H130"/><circle cx="88" cy="250" r="8"/>
+    <path d="M382 330 H416"/><circle cx="424" cy="330" r="8"/>
+    <path d="M382 400 H416"/><circle cx="424" cy="400" r="8"/>
+  </g>
+  <!-- cartão micro SD -->
+  <path d="M150 92 H352 Q362 92 362 102 V208 L344 226 V266 L362 284 V418 Q362 428 352 428 H160 Q150 428 150 418 Z"
+        fill="url(#card)"/>
+  <!-- contatos -->
+  <g fill="#C9A227">
+    <rect x="174" y="110" width="16" height="54" rx="4"/>
+    <rect x="198" y="110" width="16" height="54" rx="4"/>
+    <rect x="222" y="110" width="16" height="54" rx="4"/>
+    <rect x="246" y="110" width="16" height="54" rx="4"/>
+    <rect x="270" y="110" width="16" height="54" rx="4"/>
+    <rect x="294" y="110" width="16" height="54" rx="4"/>
+    <rect x="318" y="110" width="16" height="54" rx="4"/>
+  </g>
+  <!-- aeronave genérica -->
+  <path fill="url(#jet)" d="M256 188 C265 188 269 202 269 218 V292 L344 330 V346 L269 324 V370 L294 386 V398 L256 390 L218 398 V386 L243 370 V324 L168 346 V330 L243 292 V218 C243 202 247 188 256 188 Z"/>
+  <g fill="#1F6F9E">
+    <rect x="203" y="318" width="11" height="24" rx="5"/>
+    <rect x="298" y="318" width="11" height="24" rx="5"/>
+  </g>
+</svg>

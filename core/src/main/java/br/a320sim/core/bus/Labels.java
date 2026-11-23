@@ -23,6 +23,37 @@ public final class Labels {
     public static final String SIM_ON_GROUND = "SIM.ON_GROUND";
     public static final String SIM_RADIO_ALT = "SIM.RADIO_ALT";
     public static final String SIM_CRASHED = "SIM.CRASHED";
+    /** O que o avião atingiu no crash: "PREDIO", "ARVORE", ou vazio (crash no pouso). */
+    public static final String SIM_COLLISION = "SIM.COLLISION";
+    /** Vento: de onde ele sopra (graus), velocidade (kt) e turbulência de 0 (nenhuma) a 3 (forte). */
+    public static final String SIM_WIND_DIR = "SIM.WIND_DIR";
+    public static final String SIM_WIND_SPD = "SIM.WIND_SPD";
+    public static final String SIM_TURBULENCE = "SIM.TURBULENCE";
+    /** Bando de aves: se existe, centro (NM), altitude (ft), rumo; e se o modo automático está ligado. */
+    public static final String SIM_BIRDS = "SIM.BIRDS";
+    public static final String SIM_BIRDS_X = "SIM.BIRDS_X";
+    public static final String SIM_BIRDS_Y = "SIM.BIRDS_Y";
+    public static final String SIM_BIRDS_ALT = "SIM.BIRDS_ALT";
+    public static final String SIM_BIRDS_HDG = "SIM.BIRDS_HDG";
+    public static final String SIM_BIRDS_AUTO = "SIM.BIRDS_AUTO";
+    /** Peso do avião (kg): o peso de decolagem do plano de voo; sem plano, o modelo usa 66 t. */
+    public static final String SIM_GROSS_WEIGHT = "SIM.GROSS_WEIGHT";
+    /**
+     * Plano de voo do MCDU. São comandos do piloto ("PANEL."): no modo ALUNO vão sozinhos para o instrutor.
+     * PANEL.PLAN_OK = o aluno inseriu um plano válido.
+     */
+    public static final String PANEL_PLAN_OK = "PANEL.PLAN_OK";
+    public static final String PANEL_PLAN_ORIGIN = "PANEL.PLAN_ORIGIN";
+    public static final String PANEL_PLAN_DEST = "PANEL.PLAN_DEST";
+    public static final String PANEL_PLAN_RWY = "PANEL.PLAN_RWY";
+    public static final String PANEL_PLAN_FL = "PANEL.PLAN_FL";
+    public static final String PANEL_PLAN_ZFW = "PANEL.PLAN_ZFW";
+    public static final String PANEL_PLAN_FUEL = "PANEL.PLAN_FUEL";
+    public static final String PANEL_PLAN_V1 = "PANEL.PLAN_V1";
+    public static final String PANEL_PLAN_VR = "PANEL.PLAN_VR";
+    public static final String PANEL_PLAN_V2 = "PANEL.PLAN_V2";
+    /** Pista de destino da sessão, ex.: "SBGR 10L" (HUD e ND mostram a distância até ela). */
+    public static final String SIM_DEST_RUNWAY = "SIM.DEST_RUNWAY";
     public static final String SIM_TIME = "SIM.TIME";
     public static final String SIM_FREEZE = "SIM.FREEZE";
     public static final String SIM_IR_INSTANT_ALIGN = "SIM.IR_INSTANT_ALIGN";

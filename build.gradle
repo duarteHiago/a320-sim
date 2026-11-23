@@ -1,8 +1,12 @@
+// Versão do AVION: vale para os .jar e para o instalador (o único lugar para mudar)
+// (-Pversao=1.0.1 troca só nesta execução, para testar a atualização sem mexer aqui)
+ext.appVersion = findProperty('versao') ?: '1.0.0'
+
 subprojects {
     apply plugin: 'java'
 
     group = 'br.a320sim'
-    version = '0.1.0'
+    version = rootProject.appVersion
 
     java {
         toolchain {

@@ -2,9 +2,12 @@ package br.a320sim.host.cartridge;
 
 import br.a320sim.core.cartridge.Cartridge;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +17,9 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * Com {@link #startWatching} uma thread de fundo varre os leitores periodicamente (o Java não avisa
  * quando um cartão entra ou sai), e as telas só comparam {@link #revision()} para saber se algo mudou.
+ * <p>
+ * Também anota as inserções: um cartão que aparece numa varredura e não estava na anterior (ou que já
+ * estava na primeira varredura do programa) tem a primeira carga marcada como leitura nova.
  */
 public class CartridgeLibrary implements AutoCloseable {
 
@@ -21,6 +27,8 @@ public class CartridgeLibrary implements AutoCloseable {
     private final CartridgeLoader loader;
     private volatile List<DetectedCartridge> current;
     private volatile int revision;
+    /** Cartões que entraram no leitor e ainda não foram carregados desde então. */
+    private final Set<DetectedCartridge> freshInsertions = ConcurrentHashMap.newKeySet();
     private ScheduledExecutorService watcher;
 
     public CartridgeLibrary(CartridgeReader reader, CartridgeLoader loader) {
@@ -40,8 +48,14 @@ public class CartridgeLibrary implements AutoCloseable {
                 .findFirst();
     }
 
+    /** Carrega; a primeira carga bem-sucedida depois da inserção conta como uma leitura do cartão. */
     public Cartridge load(DetectedCartridge detected) {
-        return loader.load(detected);
+        boolean fresh = freshInsertions.contains(detected);
+        Cartridge cartridge = loader.load(detected, fresh);
+        if (fresh) {
+            freshInsertions.remove(detected);
+        }
+        return cartridge;
     }
 
     /** Muda toda vez que um cartão entra ou sai. */
@@ -62,6 +76,9 @@ public class CartridgeLibrary implements AutoCloseable {
     public synchronized List<DetectedCartridge> rescan() {
         List<DetectedCartridge> found = List.copyOf(reader.scan());
         if (current == null || !sameCards(current, found)) {
+            Set<DetectedCartridge> before = current == null ? Set.of() : new HashSet<>(current);
+            found.stream().filter(c -> !before.contains(c)).forEach(freshInsertions::add);
+            freshInsertions.retainAll(found);
             current = found;
             revision++;
         }

@@ -39,7 +39,7 @@ public class BootScreen extends RetroScreen {
     public BootScreen(SimApp app) {
         super(app);
         Host host = app.host();
-        step(0.3f, () -> print("A320 SIM  HOST BIOS v0.2", TEXT));
+        step(0.3f, () -> print("AVION  HOST BIOS v0.2", TEXT));
         step(0.3f, () -> print("RACK: " + host.rack().slots().size() + " CARTUCHOS DETECTADOS", TEXT));
         for (Cartridge cartridge : host.rack().slots().values()) {
             String pn = cartridge.manifest().partNumber();

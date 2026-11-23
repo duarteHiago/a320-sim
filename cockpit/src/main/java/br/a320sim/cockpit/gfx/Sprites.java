@@ -41,15 +41,19 @@ public final class Sprites {
         d.rect(tail + 28 * s, y - 6 * s, 1 * s, 3 * s, WINDOW);
     }
 
-    /** Logo "A320 / SIM": letras em degradê amarelo-laranja com contorno escuro, como nos fliperamas. */
+    /** Nome grande do logo e o subtítulo espaçado embaixo dele. */
+    private static final String LOGO_NAME = "AVION";
+    private static final String LOGO_SUBTITLE = "S I M U L A D O R";
+
+    /** Logo "AVION / SIMULADOR": letras em degradê amarelo-laranja com contorno escuro, como nos fliperamas. */
     public static void logo(Draw d, float cx, float cy, int scale) {
-        float width = Draw.textWidth("A320", scale);
+        float width = Draw.textWidth(LOGO_NAME, scale);
         float x = cx - width / 2;
-        outline(d, "A320", x, cy, scale, Math.max(1, scale / 2));
-        d.text("A320", x, cy, LOGO_BOTTOM, Align.LEFT, scale);
+        outline(d, LOGO_NAME, x, cy, scale, Math.max(1, scale / 2));
+        d.text(LOGO_NAME, x, cy, LOGO_BOTTOM, Align.LEFT, scale);
         // Metade de cima em amarelo: recorte horizontal
         d.clip(x - scale, cy - scale / 2f, width + 2 * scale, 5 * scale);
-        d.text("A320", x, cy, LOGO_TOP, Align.LEFT, scale);
+        d.text(LOGO_NAME, x, cy, LOGO_TOP, Align.LEFT, scale);
         d.unclip();
         // Faixas de "velocidade" saindo da esquerda
         for (int i = 0; i < 3; i++) {
@@ -57,9 +61,9 @@ public final class Sprites {
             d.rect(x - (40 + i * 18) - scale * 2, ly, 34 + i * 10, Math.max(1, scale / 2f), LOGO_BOTTOM);
         }
         int small = Math.max(1, scale / 2);
-        float simWidth = Draw.textWidth("S I M", small);
-        outline(d, "S I M", cx - simWidth / 2, cy - 6.5f * scale, small, Math.max(1, small / 2));
-        d.text("S I M", cx - simWidth / 2, cy - 6.5f * scale, SUBTITLE, Align.LEFT, small);
+        float subWidth = Draw.textWidth(LOGO_SUBTITLE, small);
+        outline(d, LOGO_SUBTITLE, cx - subWidth / 2, cy - 6.5f * scale, small, Math.max(1, small / 2));
+        d.text(LOGO_SUBTITLE, cx - subWidth / 2, cy - 6.5f * scale, SUBTITLE, Align.LEFT, small);
     }
 
     /** Contorno: o texto escuro deslocado nas 8 direções, por baixo da letra. */

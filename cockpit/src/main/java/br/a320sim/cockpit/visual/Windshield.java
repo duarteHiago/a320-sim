@@ -4,6 +4,8 @@ import br.a320sim.cockpit.gfx.Draw;
 import br.a320sim.cockpit.gfx.Draw.Align;
 import br.a320sim.core.bus.DataBus;
 import br.a320sim.core.bus.Labels;
+import br.a320sim.flightmodel.world.Runway;
+import br.a320sim.flightmodel.world.World;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.utils.Disposable;
 
@@ -178,16 +180,26 @@ public final class Windshield implements Disposable {
         d.triangle(cx, y - 8, cx - 4, y - 14, cx + 4, y - 14, HUD);
     }
 
-    /** Distância até a cabeceira da 15, pela posição das centrais inerciais (some se elas falharem). */
+    /**
+     * Distância até a cabeceira da pista de destino (SIM.DEST_RUNWAY, ex.: "SBGR 10L"; sem destino, SBKP 15),
+     * pela posição das centrais inerciais (some se elas falharem).
+     */
     private void runwayDistance(Draw d, DataBus bus, float x, float y) {
         if (!bus.has(Labels.IR_POS_X) || bus.getBoolean(Labels.SIM_ON_GROUND)) {
             return;
         }
-        double nm = Math.hypot(bus.getDouble(Labels.IR_POS_X, 0), bus.getDouble(Labels.IR_POS_Y, 0));
-        if (nm > 40) {
+        Runway target = destination(bus);
+        double nm = Math.hypot(bus.getDouble(Labels.IR_POS_X, 0) - target.xNm(),
+                bus.getDouble(Labels.IR_POS_Y, 0) - target.yNm());
+        if (nm > 60) {
             return;
         }
-        d.text(String.format("RWY 15  %.1f NM", nm), x, y, HUD, Align.CENTER);
+        d.text(String.format("%s  %.1f NM", target.id(), nm), x, y, HUD, Align.CENTER);
+    }
+
+    public static Runway destination(DataBus bus) {
+        String[] parts = bus.getString(Labels.SIM_DEST_RUNWAY, "").split(" ");
+        return parts.length == 2 ? World.runway(parts[0], parts[1]).orElse(World.HOME) : World.HOME;
     }
 
     /** O "passarinho": aponta para onde o avião está realmente indo. */
